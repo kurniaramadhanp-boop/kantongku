@@ -132,48 +132,37 @@ export default function App() {
       const nominal = Number(jsonParsed.nominal || 0);
       const catatan = jsonParsed.catatan || 'Transaksi Baru';
       const kategoriRaw = String(jsonParsed.kategori || '').toLowerCase();
-      const kepemilikanRaw = String(jsonParsed.kepemilikan || '').toLowerCase();
-      const sumberDana = jsonParsed.sumber_dana || 'Cash';
-
-      // 1. Determine Pocket ID dynamically by matching keywords in pockets list
-      let pocketId = pockets[0]?.id || 'pribadi'; // fallback to first pocket
+      const tipeRaw = String(jsonParsed.tipe || 'pengeluaran').toLowerCase();
       
-      const match = pockets.find(p => 
-        kepemilikanRaw.includes(p.name.toLowerCase()) || 
-        kepemilikanRaw.includes(p.id.toLowerCase()) ||
-        catatan.toLowerCase().includes(p.name.toLowerCase())
-      );
-      if (match) {
-        pocketId = match.id;
-      } else {
-        // Fallback checks
-        if (kepemilikanRaw.includes('orang') || catatan.toLowerCase().includes('futsal') || catatan.toLowerCase().includes('arisan') || catatan.toLowerCase().includes('kas kelas')) {
-          pocketId = pockets.find(p => p.id === 'kas' || p.name.toLowerCase().includes('kas'))?.id || pocketId;
-        } else if (kepemilikanRaw.includes('bisnis') || catatan.toLowerCase().includes('usaha') || catatan.toLowerCase().includes('modal') || catatan.toLowerCase().includes('omset')) {
-          pocketId = pockets.find(p => p.id === 'bisnis' || p.name.toLowerCase().includes('bisnis'))?.id || pocketId;
-        }
+      // Ambil parameter baru hasil analisis cerdas server.ts
+      const sumberDanaRaw = String(jsonParsed.sumber_dana || 'Cash').toLowerCase();
+      const kepemilikanRaw = String(jsonParsed.kepemilikan || 'Uangku').toLowerCase();
+
+      // 1. Tentukan KANTONG (Pocket) berdasarkan Kepemilikan dari AI
+      let pocketId = pockets[0]?.id || 'pribadi';
+      if (kepemilikanRaw.includes('bisnis')) {
+        pocketId = pockets.find(p => p.id === 'bisnis' || p.name.toLowerCase().includes('bisnis'))?.id || pocketId;
+      } else if (kepemilikanRaw.includes('orang') || kepemilikanRaw.includes('grup') || kepemilikanRaw.includes('kas')) {
+        pocketId = pockets.find(p => p.id === 'kas' || p.name.toLowerCase().includes('kas'))?.id || pocketId;
       }
 
-      // 1b. Determine Account ID dynamically by matching keywords in accounts list
+      // 2. Tentukan REKENING (Account) berdasarkan Sumber Dana dari AI
       let accountId = accounts[0]?.id || 'acc-bca';
-      const matchedAccount = accounts.find(acc => 
-        sumberDana.toLowerCase().includes(acc.name.toLowerCase()) || 
-        acc.name.toLowerCase().includes(sumberDana.toLowerCase()) ||
-        (acc.tag && acc.tag.toLowerCase().includes(sumberDana.toLowerCase()))
-      );
-      if (matchedAccount) {
-        accountId = matchedAccount.id;
-      } else {
-        if (sumberDana.toLowerCase().includes('cash') || sumberDana.toLowerCase().includes('tunai') || sumberDana.toLowerCase().includes('dompet')) {
-          const cashAcc = accounts.find(a => a.icon === 'cash');
-          if (cashAcc) accountId = cashAcc.id;
-        } else if (sumberDana.toLowerCase().includes('gopay') || sumberDana.toLowerCase().includes('ovo') || sumberDana.toLowerCase().includes('shopee') || sumberDana.toLowerCase().includes('wallet')) {
-          const walletAcc = accounts.find(a => a.icon === 'smartphone');
-          if (walletAcc) accountId = walletAcc.id;
-        }
+      if (sumberDanaRaw.includes('cash') || sumberDanaRaw.includes('tunai')) {
+        const cashAcc = accounts.find(a => a.icon === 'cash' || a.id.toLowerCase().includes('cash'));
+        if (cashAcc) accountId = cashAcc.id;
+      } else if (sumberDanaRaw.includes('dana')) {
+        const danaAcc = accounts.find(a => a.id.toLowerCase().includes('dana') || a.name.toLowerCase().includes('dana'));
+        if (danaAcc) accountId = danaAcc.id;
+      } else if (sumberDanaRaw.includes('gopay')) {
+        const gopayAcc = accounts.find(a => a.id.toLowerCase().includes('gopay') || a.name.toLowerCase().includes('gopay'));
+        if (gopayAcc) accountId = gopayAcc.id;
+      } else if (sumberDanaRaw.includes('bca')) {
+        const bcaAcc = accounts.find(a => a.id.toLowerCase().includes('bca') || a.name.toLowerCase().includes('bca'));
+        if (bcaAcc) accountId = bcaAcc.id;
       }
 
-      // 2. Determine Category Type dynamically
+      // 3. Tentukan KATEGORI secara dinamis
       let category = categories[categories.length - 1]?.id || 'lainnya';
       const matchedCategory = categories.find(cat => 
         kategoriRaw.includes(cat.name.toLowerCase()) || 
@@ -183,32 +172,19 @@ export default function App() {
       if (matchedCategory) {
         category = matchedCategory.id;
       } else {
-        // Fallback checks
         if (kategoriRaw.includes('makan') || kategoriRaw.includes('culinary')) {
           category = categories.find(c => c.id === 'makan' || c.name.toLowerCase().includes('makan'))?.id || category;
         } else if (kategoriRaw.includes('belanja') || kategoriRaw.includes('grosir')) {
           category = categories.find(c => c.id === 'belanja' || c.name.toLowerCase().includes('belanja'))?.id || category;
-        } else if (kategoriRaw.includes('bisnis') || kategoriRaw.includes('modal') || kategoriRaw.includes('usaha')) {
-          category = categories.find(c => c.id === 'bisnis' || c.name.toLowerCase().includes('usaha') || c.name.toLowerCase().includes('bisnis'))?.id || category;
         } else if (kategoriRaw.includes('kopi') || kategoriRaw.includes('minum') || kategoriRaw.includes('jajan')) {
           category = categories.find(c => c.id === 'kopi' || c.name.toLowerCase().includes('kopi') || c.name.toLowerCase().includes('jajan'))?.id || category;
-        } else if (kategoriRaw.includes('futsal') || kategoriRaw.includes('olahraga')) {
-          category = categories.find(c => c.id === 'olahraga' || c.name.toLowerCase().includes('olahraga'))?.id || category;
-        } else if (kategoriRaw.includes('sehat') || kategoriRaw.includes('obat') || kategoriRaw.includes('dokter')) {
-          category = categories.find(c => c.id === 'kesehatan' || c.name.toLowerCase().includes('sehat') || c.name.toLowerCase().includes('kesehatan'))?.id || category;
-        } else if (kategoriRaw.includes('sosial') || kategoriRaw.includes('arisan') || kategoriRaw.includes('sumbangan')) {
-          category = categories.find(c => c.id === 'sosial' || c.name.toLowerCase().includes('sosial'))?.id || category;
-        } else if (kategoriRaw.includes('gaji') || kategoriRaw.includes('omset') || kategoriRaw.includes('pendapatan') || kategoriRaw.includes('masuk')) {
-          category = categories.find(c => c.id === 'pendapatan' || c.name.toLowerCase().includes('pendapatan') || c.name.toLowerCase().includes('gaji'))?.id || category;
+        } else if (kategoriRaw.includes('gaji') || kategoriRaw.includes('pendapatan')) {
+          category = categories.find(c => c.id === 'pendapatan' || c.name.toLowerCase().includes('pendapatan'))?.id || category;
         }
       }
 
-      // 3. Determine transaction type (incoming / outgoing)
-      let type: 'incoming' | 'outgoing' = 'outgoing';
-      const lowerCat = catatan.toLowerCase();
-      if (lowerCat.includes('gaji') || lowerCat.includes('omset') || lowerCat.includes('pendapatan') || lowerCat.includes('masuk') || lowerCat.includes('terima') || category === 'pendapatan') {
-        type = 'incoming';
-      }
+      // 4. Tentukan Tipe Transaksi
+      let type: 'incoming' | 'outgoing' = tipeRaw === 'pemasukan' ? 'incoming' : 'outgoing';
 
       handleAddTransaction({
         title: catatan,
@@ -217,10 +193,10 @@ export default function App() {
         accountId,
         category,
         type,
-        notes: `Pembongkaran AI Gemini: ${catatan}. Sumber dana: ${sumberDana}.`
+        notes: `Dianalisis AI via Suara/Media: ${catatan}`
       });
 
-      alert(`Sukses Menyimpan ke Firebase!\nTransaksi: "${catatan}" senilai Rp ${nominal.toLocaleString('id-ID')} masuk ke Kantong ${pocketId.toUpperCase()} & Rekening ${accountId.toUpperCase()}.`);
+      alert(`Sukses Menyimpan ke Perangkat!\nTransaksi: "${catatan}" senilai Rp ${nominal.toLocaleString('id-ID')} masuk ke Kantong ${pocketId.toUpperCase()} & Rekening ${accountId.toUpperCase()}.`);
     };
 
     // Bind React data deletion helpers globally so index.html Script can update state as well

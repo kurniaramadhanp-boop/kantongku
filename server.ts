@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -25,7 +25,8 @@ const ai = new GoogleGenAI({
 // Robust helper with retries and fallback models for high demand or transient API failures
 async function generateContentWithRetry(options: any, maxRetries = 2) {
   let attempt = 0;
-  const modelsToTry = [options.model, "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  // Menyesuaikan dengan daftar model stabil terbaru yang dikenali SDK baru
+  const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
   
   while (true) {
     try {
@@ -51,7 +52,6 @@ async function generateContentWithRetry(options: any, maxRetries = 2) {
         continue;
       }
       
-      // If we still have fallback models, let's try other models in sequence
       if (attempt < modelsToTry.length) {
         console.warn(`[Gemini API] Error on model call. Trying fallback model: ${modelsToTry[attempt]}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -71,32 +71,27 @@ app.post("/api/parse", async (req, res) => {
       return res.status(400).json({ error: "Input teks tidak boleh kosong" });
     }
 
-    // Call Gemini with structured JSON output rules
+    // PERBAIKAN: Struktur parameter 'contents' disesuaikan dengan aturan @google/genai terbaru
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
-      contents: `Parse input berikut: "${prompt}"
-
-Aturan Khusus:
-1. Jika ada kata-kata seperti 'futsal', 'arisan', 'kas kelas', maka otomatis 'kepemilikan' harus "Uang Orang".
-2. Jika menyebut kata 'usaha', 'modal', 'omset', maka 'kepemilikan' harus "Uang Bisnis".
-3. Jika tidak memenuhi aturan diatas, tentukan nilai yang paling relevan (atau default "Uangku").
-4. "nominal" harus berupa angka bilangan bulat (integer), jika tidak terdeteksi isi saja 0.
-5. "kategori" pilih salah satu yang paling cocok atau sesuai konteks. Jika tidak tahu isi "Lainnya".
-6. "sumber_dana" tentukan yang paling cocok atau sebutkan bank/e-wallet yang ada (seperti Bank_BCA, Dana, GoPay, Cash) atau default "Cash" jika tidak disebutkan.
-7. "catatan" berikan keterangan singkat dari transaksi tersebut.`,
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Parse input berikut: "${prompt}"` }]
+        }
+      ],
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: JANGAN mengarang data jika konteks tidak jelas.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: JANGAN mengarang data jika konteks tidak jelas.",
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer." },
-            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
-            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi." },
-            sumber_dana: { type: Type.STRING, description: "Sumber dana yang digunakan. Default: 'Cash'." },
-            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (default), 'Uang Orang', atau 'Uang Bisnis'." }
+            nominal: { type: "INTEGER", description: "Jumlah uang dalam bentuk angka integer." },
+            kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi." },
+            tipe: { type: "STRING", description: "Pilih wajib antara: 'pemasukan' atau 'pengeluaran'." }
           },
-          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
+          required: ["nominal", "kategori", "catatan", "tipe"]
         }
       }
     });
@@ -118,14 +113,14 @@ app.post("/api/parse-media", async (req, res) => {
       return res.status(400).json({ error: "Data media dan tipeMedia wajib disertakan" });
     }
 
-    // Strip base64 headers if present (e.g. "data:image/jpeg;base64,")
     let cleanBase64 = mediaData;
     if (mediaData.includes(";base64,")) {
       cleanBase64 = mediaData.split(";base64,")[1];
     }
 
+    // PERBAIKAN: Menggunakan model stabil 'gemini-2.5-flash' dan skema tipe string
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash",
       contents: [
         {
           role: "user",
@@ -144,13 +139,13 @@ app.post("/api/parse-media", async (req, res) => {
         systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
-            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
-            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
-            sumber_dana: { type: Type.STRING, description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
-            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." }
+            nominal: { type: "INTEGER", description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
+            kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
+            sumber_dana: { type: "STRING", description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
+            kepemilikan: { type: "STRING", description: "Pilih wajib antara: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." }
           },
           required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
         }

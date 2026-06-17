@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -6,7 +6,8 @@ const ai = new GoogleGenAI({
 
 async function generateContentWithRetry(options: any, maxRetries = 2) {
   let attempt = 0;
-  const modelsToTry = [options.model, "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  // Menyesuaikan model rilis stabil terkini untuk performa terbaik
+  const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
   
   while (true) {
     try {
@@ -50,40 +51,36 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Input teks tidak boleh kosong" });
     }
 
+    // Perbaikan struktur parameter payload sesuai standar SDK @google/genai terbaru
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
-      contents: `Parse input berikut: "${prompt}"
-
-Aturan Khusus:
-1. Jika ada kata-kata seperti 'futsal', 'arisan', 'kas kelas', maka otomatis 'kepemilikan' harus "Uang Orang".
-2. Jika menyebut kata 'usaha', 'modal', 'omset', maka 'kepemilikan' harus "Uang Bisnis".
-3. Jika tidak memenuhi aturan diatas, tentukan nilai yang paling relevan (atau default "Uangku").
-4. "nominal" harus berupa angka bilangan bulat (integer), jika tidak terdeteksi isi saja 0.
-5. "kategori" pilih salah satu yang paling cocok atau sesuai konteks. Jika tidak tahu isi "Lainnya".
-6. "sumber_dana" tentukan yang paling cocok atau sebutkan bank/e-wallet yang ada (seperti Bank_BCA, Dana, GoPay, Cash) atau default "Cash" jika tidak disebutkan.
-7. "catatan" berikan keterangan singkat dari transaksi tersebut.`,
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Parse input berikut: "${prompt}"` }]
+        }
+      ],
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: JANGAN mengarang data jika konteks tidak jelas.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer." },
-            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
-            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi." },
-            sumber_dana: { type: Type.STRING, description: "Sumber dana yang digunakan. Default: 'Cash'." },
-            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (default), 'Uang Orang', atau 'Uang Bisnis'." }
+            nominal: { type: "INTEGER", description: "Jumlah uang dalam bentuk angka integer." },
+            kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi." },
+            tipe: { type: "STRING", description: "Pilih wajib antara: 'pemasukan' atau 'pengeluaran'." }
           },
-          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
+          required: ["nominal", "kategori", "catatan", "tipe"]
         }
       }
     });
 
     const textResult = response.text || "{}";
     const parsedData = JSON.parse(textResult);
-    res.status(200).json(parsedData);
+    return res.status(200).json(parsedData);
   } catch (error: any) {
-    console.error("Gagal melakukan parse:", error);
-    res.status(500).json({ error: error.message || "Gagal memproses input dengan AI" });
+    console.error("Gagal melakukan parse teks:", error);
+    return res.status(500).json({ error: error.message || "Gagal memproses input dengan AI" });
   }
 }

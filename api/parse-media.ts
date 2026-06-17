@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -6,7 +6,8 @@ const ai = new GoogleGenAI({
 
 async function generateContentWithRetry(options: any, maxRetries = 2) {
   let attempt = 0;
-  const modelsToTry = [options.model, "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  // Menyesuaikan model rilis stabil terkini untuk performa terbaik
+  const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
   
   while (true) {
     try {
@@ -55,8 +56,9 @@ export default async function handler(req: any, res: any) {
       cleanBase64 = mediaData.split(";base64,")[1];
     }
 
+    // Menggunakan parameter generateContent yang sesuai standar SDK @google/genai terbaru
     const response = await generateContentWithRetry({
-      model: "gemini-3.5-flash",
+      model: "gemini-2.5-flash", 
       contents: [
         {
           role: "user",
@@ -72,27 +74,28 @@ export default async function handler(req: any, res: any) {
         }
       ],
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
-            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
-            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
-            sumber_dana: { type: Type.STRING, description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
-            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." }
+            nominal: { type: "INTEGER", description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
+            kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
+            tipe: { type: "STRING", description: "Pilih wajib antara: 'pemasukan' atau 'pengeluaran'." }
           },
-          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
+          required: ["nominal", "kategori", "catatan", "tipe"]
         }
       }
     });
 
+    // Mengambil text hasil dari struktur respons SDK baru secara aman
     const textResult = response.text || "{}";
     const parsedData = JSON.parse(textResult);
-    res.status(200).json(parsedData);
+    
+    return res.status(200).json(parsedData);
   } catch (error: any) {
     console.error("Gagal melakukan parse media:", error);
-    res.status(500).json({ error: error.message || "Gagal memproses struk/suara via AI" });
+    return res.status(500).json({ error: error.message || "Gagal memproses struk/suara via AI" });
   }
 }

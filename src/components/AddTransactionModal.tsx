@@ -158,37 +158,23 @@ export default function AddTransactionModal({
 
       const rawTitle = data.catatan || 'Transaksi Baru';
       setTitle(rawTitle);
-      setNotes(`Dianalisis AI: ${rawTitle}. Sumber Dana: ${data.sumber_dana || 'Cash'}. Kepemilikan: ${data.kepemilikan || 'Uangku'}`);
+      setNotes(`Dianalisis AI: ${rawTitle}`);
 
       // Kepemilikan rules
-      const kep = String(data.kepemilikan || '').toLowerCase();
-      if (kep.includes('orang') || text.toLowerCase().includes('futsal') || text.toLowerCase().includes('arisan') || text.toLowerCase().includes('kas kelas')) {
+      if (rawTitle.toLowerCase().includes('futsal') || rawTitle.toLowerCase().includes('arisan') || rawTitle.toLowerCase().includes('kas')) {
         setPocketId('kas');
-      } else if (kep.includes('bisnis') || text.toLowerCase().includes('usaha') || text.toLowerCase().includes('modal') || text.toLowerCase().includes('omset')) {
+      } else if (rawTitle.toLowerCase().includes('bisnis') || rawTitle.toLowerCase().includes('usaha') || rawTitle.toLowerCase().includes('omset')) {
         setPocketId('bisnis');
       } else {
         setPocketId('pribadi');
       }
 
-      // Account mapping rules based on data.sumber_dana
-      const rawSource = String(data.sumber_dana || '').toLowerCase();
-      const matchedAccount = accounts.find(acc => 
-        acc.name.toLowerCase().includes(rawSource) || 
-        (acc.tag && acc.tag.toLowerCase().includes(rawSource)) ||
-        rawSource.includes(acc.name.toLowerCase())
-      );
-      if (matchedAccount) {
-        setAccountId(matchedAccount.id);
+      // Account rules 
+      if (rawTitle.toLowerCase().includes('cash') || rawTitle.toLowerCase().includes('tunai')) {
+        const cashAcc = accounts.find(a => a.icon === 'cash');
+        if (cashAcc) setAccountId(cashAcc.id);
       } else {
-        if (rawSource.includes('cash') || rawSource.includes('tunai') || rawSource.includes('dompet')) {
-          const cashAcc = accounts.find(a => a.icon === 'cash');
-          if (cashAcc) setAccountId(cashAcc.id);
-        } else if (rawSource.includes('gopay') || rawSource.includes('ovo') || rawSource.includes('shopee') || rawSource.includes('wallet')) {
-          const walletAcc = accounts.find(a => a.icon === 'smartphone');
-          if (walletAcc) setAccountId(walletAcc.id);
-        } else {
-          if (accounts.length > 0) setAccountId(accounts[0].id);
-        }
+        if (accounts.length > 0) setAccountId(accounts[0].id);
       }
 
       // Kategori mapping rules dynamically
@@ -224,8 +210,7 @@ export default function AddTransactionModal({
       }
 
       // Type default
-      const lowercaseText = text.toLowerCase();
-      if (lowercaseText.includes('omset') || lowercaseText.includes('gaji') || lowercaseText.includes('pendapatan') || lowercaseText.includes('masuk') || lowercaseText.includes('terima')) {
+      if (String(data.tipe).toLowerCase() === 'pemasukan') {
         setType('incoming');
       } else {
         setType('outgoing');
@@ -252,46 +237,47 @@ export default function AddTransactionModal({
         const base64Data = reader.result as string;
         setProgressMsg('Mengunggah ke API Gemini dan menganalisis berkas...');
         
-        // Invoke globally bound kirimKeGeminiAI
+        // Invoke globally bound kirimKeGeminiAI (Otomatis memetakan & menyimpan data cerdas)
         const parsed = await (window as any).kirimKeGeminiAI(base64Data, file.type);
         
         if (parsed) {
           setIsProcessing(false);
           setAudioRecording(false);
           
-          // Autofill form inputs for manual verification screen
+          // 1. Autofill data dasar dari AI ke state form
           setTitle(parsed.catatan || 'Transaksi Baru');
           setAmount(parsed.nominal || 0);
-          
-          let pocket: PocketType = 'pribadi';
-          const kep = String(parsed.kepemilikan || '').toLowerCase();
-          if (kep.includes('orang')) pocket = 'kas';
-          else if (kep.includes('bisnis')) pocket = 'bisnis';
+          setNotes(`Diunggah via berkas ${type === 'audio' ? 'suara' : 'struk'}: ${file.name}.`);
 
+          // 2. Petakan KANTONG (Pocket) secara dinamis dari parameter kepemilikan AI
+          const kepemilikanRaw = String(parsed.kepemilikan || 'Uangku').toLowerCase();
+          let pocket: PocketType = pockets[0]?.id || 'pribadi';
+          if (kepemilikanRaw.includes('bisnis')) {
+            pocket = pockets.find(p => p.id === 'bisnis' || p.name.toLowerCase().includes('bisnis'))?.id || pocket;
+          } else if (kepemilikanRaw.includes('orang') || kepemilikanRaw.includes('grup') || kepemilikanRaw.includes('kas')) {
+            pocket = pockets.find(p => p.id === 'kas' || p.name.toLowerCase().includes('kas'))?.id || pocket;
+          }
           setPocketId(pocket);
 
-          // Account mapping rules based on parsed.sumber_dana
-          const rawSource = String(parsed.sumber_dana || '').toLowerCase();
-          const matchedAccount = accounts.find(acc => 
-            acc.name.toLowerCase().includes(rawSource) || 
-            (acc.tag && acc.tag.toLowerCase().includes(rawSource)) ||
-            rawSource.includes(acc.name.toLowerCase())
-          );
-          if (matchedAccount) {
-            setAccountId(matchedAccount.id);
-          } else {
-            if (rawSource.includes('cash') || rawSource.includes('tunai') || rawSource.includes('dompet')) {
-              const cashAcc = accounts.find(a => a.icon === 'cash');
-              if (cashAcc) setAccountId(cashAcc.id);
-            } else if (rawSource.includes('gopay') || rawSource.includes('ovo') || rawSource.includes('shopee') || rawSource.includes('wallet')) {
-              const walletAcc = accounts.find(a => a.icon === 'smartphone');
-              if (walletAcc) setAccountId(walletAcc.id);
-            } else {
-              if (accounts.length > 0) setAccountId(accounts[0].id);
-            }
+          // 3. Petakan REKENING (Account) secara dinamis dari parameter sumber_dana AI
+          const sumberDanaRaw = String(parsed.sumber_dana || 'Cash').toLowerCase();
+          let accId = accounts[0]?.id || 'acc-bca';
+          if (sumberDanaRaw.includes('cash') || sumberDanaRaw.includes('tunai')) {
+            const cashAcc = accounts.find(a => a.icon === 'cash' || a.id.toLowerCase().includes('cash'));
+            if (cashAcc) accId = cashAcc.id;
+          } else if (sumberDanaRaw.includes('dana')) {
+            const danaAcc = accounts.find(a => a.id.toLowerCase().includes('dana') || a.name.toLowerCase().includes('dana'));
+            if (danaAcc) accId = danaAcc.id;
+          } else if (sumberDanaRaw.includes('gopay')) {
+            const gopayAcc = accounts.find(a => a.id.toLowerCase().includes('gopay') || a.name.toLowerCase().includes('gopay'));
+            if (gopayAcc) accId = gopayAcc.id;
+          } else if (sumberDanaRaw.includes('bca')) {
+            const bcaAcc = accounts.find(a => a.id.toLowerCase().includes('bca') || a.name.toLowerCase().includes('bca'));
+            if (bcaAcc) accId = bcaAcc.id;
           }
+          setAccountId(accId);
 
-          // Category mapping dynamically
+          // 4. Petakan KATEGORI secara dinamis dari parameter kategori AI
           let cat = categories[categories.length - 1]?.id || 'lainnya';
           const catRaw = String(parsed.kategori || '').toLowerCase();
           const matchedCategory = categories.find(c => 
@@ -302,34 +288,24 @@ export default function AddTransactionModal({
           if (matchedCategory) {
             cat = matchedCategory.id;
           } else {
-            // Fallback checks
             if (catRaw.includes('makan') || catRaw.includes('culinary')) {
-              cat = categories.find(c => c.id === 'makan' || c.name.toLowerCase().includes('makan'))?.id || categories[0]?.id || 'makan';
+              cat = categories.find(c => c.id === 'makan' || c.name.toLowerCase().includes('makan'))?.id || cat;
             } else if (catRaw.includes('belanja') || catRaw.includes('grosir')) {
-              cat = categories.find(c => c.id === 'belanja' || c.name.toLowerCase().includes('belanja'))?.id || categories[0]?.id || 'makan';
-            } else if (catRaw.includes('bisnis') || catRaw.includes('modal') || catRaw.includes('usaha')) {
-              cat = categories.find(c => c.id === 'bisnis' || c.name.toLowerCase().includes('usaha') || c.name.toLowerCase().includes('bisnis'))?.id || categories[0]?.id || 'makan';
+              cat = categories.find(c => c.id === 'belanja' || c.name.toLowerCase().includes('belanja'))?.id || cat;
             } else if (catRaw.includes('kopi') || catRaw.includes('minum') || catRaw.includes('jajan')) {
-              cat = categories.find(c => c.id === 'kopi' || c.name.toLowerCase().includes('kopi') || c.name.toLowerCase().includes('jajan'))?.id || categories[0]?.id || 'makan';
-            } else if (catRaw.includes('futsal') || catRaw.includes('olahraga')) {
-              cat = categories.find(c => c.id === 'olahraga' || c.name.toLowerCase().includes('olahraga'))?.id || categories[0]?.id || 'makan';
-            } else if (catRaw.includes('sehat') || catRaw.includes('obat') || catRaw.includes('dokter')) {
-              cat = categories.find(c => c.id === 'kesehatan' || c.name.toLowerCase().includes('sehat') || c.name.toLowerCase().includes('kesehatan'))?.id || categories[0]?.id || 'makan';
-            } else if (catRaw.includes('sosial') || catRaw.includes('arisan') || catRaw.includes('sumbangan')) {
-              cat = categories.find(c => c.id === 'sosial' || c.name.toLowerCase().includes('sosial'))?.id || categories[0]?.id || 'makan';
-            } else if (catRaw.includes('gaji') || catRaw.includes('omset') || catRaw.includes('pendapatan') || catRaw.includes('masuk')) {
-              cat = categories.find(c => c.id === 'pendapatan' || c.name.toLowerCase().includes('pendapatan') || c.name.toLowerCase().includes('gaji'))?.id || categories[0]?.id || 'makan';
+              cat = categories.find(c => c.id === 'kopi' || c.name.toLowerCase().includes('kopi') || c.name.toLowerCase().includes('jajan'))?.id || cat;
             }
           }
           setCategory(cat);
 
+          // 5. Tentukan Tipe Transaksi
           let tType: 'incoming' | 'outgoing' = 'outgoing';
-          if (cat === 'pendapatan' || (parsed.catatan && (parsed.catatan.toLowerCase().includes('masuk') || parsed.catatan.toLowerCase().includes('omset')))) {
+          if (String(parsed.tipe).toLowerCase() === 'pemasukan') {
             tType = 'incoming';
           }
           setType(tType);
 
-          setNotes(`Diunggah via berkas: ${file.name}.`);
+          // Pindahkan view ke form manual agar user bisa memverifikasi kecocokan data sebelum final
           setCurrentView('manual');
         }
       } catch (err: any) {
