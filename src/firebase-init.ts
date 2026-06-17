@@ -70,20 +70,11 @@ window.ubahProfilFirebase = async function(displayName, photoURL) {
         const user = auth.currentUser;
         if (!user) throw new Error("Pengguna tidak terautentikasi.");
         
-        let finalPhotoUrl = photoURL;
-        if (photoURL && photoURL.startsWith('data:image')) {
-            try {
-                const storageRef = ref(storage, `avatars/${user.uid}`);
-                await uploadString(storageRef, photoURL, 'data_url');
-                finalPhotoUrl = await getDownloadURL(storageRef);
-            } catch (uploadError) {
-                console.warn("Storage upload failed, fallback to local only", uploadError);
-                finalPhotoUrl = user.photoURL; // keep old remote url, ignore local base64 for remote
-            }
-        }
-        
-        await updateProfile(user, { displayName, photoURL: finalPhotoUrl });
-        return finalPhotoUrl;
+        // Simpan hanya displayName ke Firebase
+        // photoURL (berupa base64) akan diabaikan oleh Firebase namun tetap
+        // disimpan di localStorage oleh React (sesuai permintaan user).
+        await updateProfile(user, { displayName });
+        return photoURL;
     } catch (error) {
         console.error("Firebase Update Profile Error:", error);
         throw error;

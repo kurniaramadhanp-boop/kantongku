@@ -66,8 +66,8 @@ export default function ActivityView({ transactions, pockets, categories, onOpen
     });
 
     if (outgoingThisMonth.length === 0) {
-      // No real data — return fallback placeholder so chart isn't flat
-      return [240000, 480000, 680000, 1050000];
+      // No real data — return 0
+      return [0, 0, 0, 0];
     }
 
     const liveWeeks = [0, 0, 0, 0];
