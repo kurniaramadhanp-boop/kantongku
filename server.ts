@@ -81,35 +81,20 @@ Aturan Khusus:
 2. Jika menyebut kata 'usaha', 'modal', 'omset', maka 'kepemilikan' harus "Uang Bisnis".
 3. Jika tidak memenuhi aturan diatas, tentukan nilai yang paling relevan (atau default "Uangku").
 4. "nominal" harus berupa angka bilangan bulat (integer), jika tidak terdeteksi isi saja 0.
-5. "kategori" pilih salah satu yang paling cocok atau sesuai konteks dari daftar berikut atau sejenisnya: Jajan, Makan, Kas_RT, Futsal, Modal_Bisnis, dll.
+5. "kategori" pilih salah satu yang paling cocok atau sesuai konteks. Jika tidak tahu isi "Lainnya".
 6. "sumber_dana" tentukan yang paling cocok atau sebutkan bank/e-wallet yang ada (seperti Bank_BCA, Dana, GoPay, Cash) atau default "Cash" jika tidak disebutkan.
 7. "catatan" berikan keterangan singkat dari transaksi tersebut.`,
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: JANGAN mengarang data jika konteks tidak jelas.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            nominal: { 
-              type: Type.INTEGER,
-              description: "Jumlah uang dalam bentuk angka integer."
-            },
-            kategori: { 
-              type: Type.STRING,
-              description: "Kategori pengeluaran/pemasukan seperti Jajan / Makan / Kas_RT / Futsal / Modal_Bisnis / dll."
-            },
-            catatan: { 
-              type: Type.STRING,
-              description: "Keterangan singkat tentang transaksi."
-            },
-            sumber_dana: { 
-              type: Type.STRING,
-              description: "Sumber dana yang digunakan, contoh: Bank_BCA / Dana / GoPay / Cash / dll."
-            },
-            kepemilikan: { 
-              type: Type.STRING,
-              description: "Ditentukan secara otomatis: 'Uangku' (default), 'Uang Orang' (futsal, arisan, kas kelas) atau 'Uang Bisnis' (usaha, modal, omset)."
-            }
+            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer." },
+            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi." },
+            sumber_dana: { type: Type.STRING, description: "Sumber dana yang digunakan. Default: 'Cash'." },
+            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (default), 'Uang Orang', atau 'Uang Bisnis'." }
           },
           required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
         }
@@ -156,31 +141,16 @@ app.post("/api/parse-media", async (req, res) => {
         }
       ],
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            nominal: { 
-              type: Type.INTEGER,
-              description: "Jumlah uang dalam bentuk angka integer."
-            },
-            kategori: { 
-              type: Type.STRING,
-              description: "Kategori pengeluaran/pemasukan seperti Jajan / Makan / Kas_RT / Futsal / Modal_Bisnis / dll."
-            },
-            catatan: { 
-              type: Type.STRING,
-              description: "Keterangan singkat tentang transaksi."
-            },
-            sumber_dana: { 
-              type: Type.STRING,
-              description: "Sumber dana yang digunakan, contoh: Bank_BCA / Dana / GoPay / Cash / dll."
-            },
-            kepemilikan: { 
-              type: Type.STRING,
-              description: "Ditentukan secara otomatis: 'Uangku' (default), 'Uang Orang' (futsal, arisan, kas kelas) atau 'Uang Bisnis' (usaha, modal, omset)."
-            }
+            nominal: { type: Type.INTEGER, description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
+            kategori: { type: Type.STRING, description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
+            catatan: { type: Type.STRING, description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
+            sumber_dana: { type: Type.STRING, description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
+            kepemilikan: { type: Type.STRING, description: "Pilih: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." }
           },
           required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
         }
