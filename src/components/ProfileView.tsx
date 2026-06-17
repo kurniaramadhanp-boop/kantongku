@@ -19,7 +19,7 @@ interface ProfileViewProps {
   onResetData: () => void;
   onSaveProfile: (name: string, avatarUrl: string) => Promise<void>;
   onSaveSettings: (settings: AppSettings) => void;
-  onChangePassword: (newPass: string) => Promise<void>;
+  onChangePassword: (oldPass: string, newPass: string) => Promise<void>;
 }
 
 export default function ProfileView({
@@ -83,7 +83,7 @@ export default function ProfileView({
     
     try {
       setPassMsg({ type: 'success', text: 'Sedang memperbarui kata sandi di Firebase...' });
-      await onChangePassword(newPass);
+      await onChangePassword(oldPass, newPass);
       setPassMsg({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
       setOldPass(''); setNewPass(''); setConfirmPass('');
       setTimeout(() => { setPassMsg(null); setShowPasswordForm(false); }, 2000);
@@ -241,76 +241,7 @@ export default function ProfileView({
         )}
       </section>
 
-      {/* System Settings */}
-      <section className="flex flex-col gap-2.5">
-        <span className="text-xs font-label-caps text-on-surface-variant uppercase tracking-wider block">Sistem &amp; Preferensi</span>
-        
-        <div className="flex flex-col gap-2">
-          {/* Currency toggle */}
-          <div className="glass-card rounded-lg p-3.5 flex justify-between items-center text-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 shrink-0">
-                <CreditCard className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-white font-medium block">Mata Uang Utama</span>
-                <span className="text-[10px] text-on-surface-variant">Format tampilan nominal</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 bg-[#0B111E]/60 border border-white/10 rounded-lg p-0.5">
-              {(['IDR', 'USD'] as const).map(c => (
-                <button
-                  key={c}
-                  onClick={() => updateSetting('currency', c)}
-                  className={`px-3 h-7 rounded-md text-xs font-label-caps font-bold transition-all ${settings.currency === c ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-white'}`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Theme toggle */}
-          <div className="glass-card rounded-lg p-3.5 flex justify-between items-center text-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
-                {settings.theme === 'dark' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5 text-amber-400" />}
-              </div>
-              <div>
-                <span className="text-white font-medium block">Mode Tampilan</span>
-                <span className="text-[10px] text-on-surface-variant">{settings.theme === 'dark' ? 'Mode Gelap aktif' : 'Mode Terang aktif'}</span>
-              </div>
-            </div>
-            <button
-              onClick={() => updateSetting('theme', settings.theme === 'dark' ? 'light' : 'dark')}
-              className={`relative w-12 h-6 rounded-full border transition-all ${settings.theme === 'light' ? 'bg-amber-400/20 border-amber-400/40' : 'bg-indigo-500/20 border-indigo-500/40'}`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full shadow transition-all flex items-center justify-center ${settings.theme === 'light' ? 'left-6 bg-amber-400' : 'left-0.5 bg-indigo-500'}`}>
-                {settings.theme === 'dark' ? <Moon className="w-3 h-3 text-white" /> : <Sun className="w-3 h-3 text-white" />}
-              </span>
-            </button>
-          </div>
-
-          {/* Alarm Rem toggle */}
-          <div className="glass-card rounded-lg p-3.5 flex justify-between items-center text-sm">
-            <div className="flex items-center gap-3">
-              <div className={`w-9 h-9 flex items-center justify-center rounded-lg shrink-0 ${settings.alarmRem ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' : 'bg-white/5 border border-white/10 text-on-surface-variant/40'}`}>
-                {settings.alarmRem ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-              </div>
-              <div>
-                <span className="text-white font-medium block">Alarm Rem Finansial</span>
-                <span className="text-[10px] text-on-surface-variant">Notifikasi saat budget hampir habis</span>
-              </div>
-            </div>
-            <button
-              onClick={() => updateSetting('alarmRem', !settings.alarmRem)}
-              className={`relative w-12 h-6 rounded-full border transition-all ${settings.alarmRem ? 'bg-primary/20 border-primary/40' : 'bg-white/5 border-white/10'}`}
-            >
-              <span className={`absolute top-0.5 w-5 h-5 rounded-full shadow transition-all ${settings.alarmRem ? 'left-6 bg-primary' : 'left-0.5 bg-surface-variant'}`} />
-            </button>
-          </div>
-        </div>
-      </section>
 
       {/* Dangerous Actions */}
       <section className="flex flex-col gap-2.5 mt-2">

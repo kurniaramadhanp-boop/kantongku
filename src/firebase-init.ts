@@ -1,6 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
 import { getFirestore, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updatePassword, updateProfile, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
+import { getStorage, ref, uploadString, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-storage.js";
 
 // Initialize Firebase with your actual project config
 const app = initializeApp({
@@ -15,6 +16,7 @@ const app = initializeApp({
 
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 // Firebase Authentication Helpers
 window.daftarAkunFirebase = async function(email, password) {
@@ -46,10 +48,16 @@ window.keluarAkunFirebase = async function() {
     }
 };
 
-window.ubahKataSandiFirebase = async function(newPassword) {
+window.ubahKataSandiFirebase = async function(oldPassword, newPassword) {
     try {
         const user = auth.currentUser;
         if (!user) throw new Error("Pengguna tidak terautentikasi.");
+        
+        if (oldPassword) {
+            const credential = EmailAuthProvider.credential(user.email, oldPassword);
+            await reauthenticateWithCredential(user, credential);
+        }
+        
         await updatePassword(user, newPassword);
     } catch (error) {
         console.error("Firebase Update Password Error:", error);
@@ -61,7 +69,21 @@ window.ubahProfilFirebase = async function(displayName, photoURL) {
     try {
         const user = auth.currentUser;
         if (!user) throw new Error("Pengguna tidak terautentikasi.");
-        await updateProfile(user, { displayName, photoURL });
+        
+        let finalPhotoUrl = photoURL;
+        if (photoURL && photoURL.startsWith('data:image')) {
+            try {
+                const storageRef = ref(storage, `avatars/${user.uid}`);
+                await uploadString(storageRef, photoURL, 'data_url');
+                finalPhotoUrl = await getDownloadURL(storageRef);
+            } catch (uploadError) {
+                console.warn("Storage upload failed, fallback to local only", uploadError);
+                finalPhotoUrl = user.photoURL; // keep old remote url, ignore local base64 for remote
+            }
+        }
+        
+        await updateProfile(user, { displayName, photoURL: finalPhotoUrl });
+        return finalPhotoUrl;
     } catch (error) {
         console.error("Firebase Update Profile Error:", error);
         throw error;

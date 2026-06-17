@@ -799,9 +799,9 @@ export default function App() {
     localStorage.setItem('kantongku_user', JSON.stringify(updated));
   };
 
-  const handleChangePassword = async (newPass: string) => {
+  const handleChangePassword = async (oldPass: string, newPass: string) => {
     if ((window as any).ubahKataSandiFirebase) {
-      await (window as any).ubahKataSandiFirebase(newPass);
+      await (window as any).ubahKataSandiFirebase(oldPass, newPass);
     }
   };
 
