@@ -107,7 +107,7 @@ export default function App() {
       console.log("[Firebase Auth State] Changed:", firebaseUser);
       if (firebaseUser) {
         // User is logged in
-        const profile = getDefaultProfile(firebaseUser.email);
+        const profile = getDefaultProfile(firebaseUser.email, firebaseUser.displayName, firebaseUser.photoURL);
         setCurrentUser(profile);
         localStorage.setItem('kantongku_user', JSON.stringify(profile));
         setActiveTab('home');
@@ -789,11 +789,20 @@ export default function App() {
     setActiveTab('history');
   };
 
-  const handleSaveProfile = (name: string, avatarUrl: string) => {
+  const handleSaveProfile = async (name: string, avatarUrl: string) => {
     if (!currentUser) return;
+    if ((window as any).ubahProfilFirebase) {
+      await (window as any).ubahProfilFirebase(name, avatarUrl);
+    }
     const updated = { ...currentUser, name, avatarUrl };
     setCurrentUser(updated);
     localStorage.setItem('kantongku_user', JSON.stringify(updated));
+  };
+
+  const handleChangePassword = async (newPass: string) => {
+    if ((window as any).ubahKataSandiFirebase) {
+      await (window as any).ubahKataSandiFirebase(newPass);
+    }
   };
 
   const handleSaveSettings = (settings: AppSettings) => {
@@ -970,6 +979,7 @@ export default function App() {
               onResetData={handleResetData}
               onSaveProfile={handleSaveProfile}
               onSaveSettings={handleSaveSettings}
+              onChangePassword={handleChangePassword}
             />
           )}
         </div>

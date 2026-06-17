@@ -46,13 +46,13 @@ export function formatDate(dateStr: string): string {
   }
 }
 
-export function getDefaultProfile(email: string): UserProfile {
+export function getDefaultProfile(email: string, displayName?: string | null, photoURL?: string | null): UserProfile {
   const cleanName = email.split('@')[0];
   const capitalizedName = cleanName.charAt(0).toUpperCase() + cleanName.slice(1);
   return {
     email: email,
-    name: capitalizedName || 'Pengguna',
-    avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZ1t6mUd4xCqLFKL2_c7K6KITRzXBT_6bsXGtqgvFwzZriYpqC6DM5hZqNMlO-yE5apNldrM4VqcMFlX5niuVlXnMQY3dOY6Fpfr6qcyIZJ8iHW_D5324RTE9IQW7Iah0OaQ28b5kORr3X-eUxBgt_qp2S4qOnUxvstVpmSvhU0JmeLPI5nyPcvQyVXKOM7nDOcIDH6bihMJveNbQuZ5wxEoz9EoKxFCxSK3S9c-kI0kIX55XsbWdw',
+    name: displayName || capitalizedName || 'Pengguna',
+    avatarUrl: photoURL || 'https://lh3.googleusercontent.com/aida-public/AB6AXuAZ1t6mUd4xCqLFKL2_c7K6KITRzXBT_6bsXGtqgvFwzZriYpqC6DM5hZqNMlO-yE5apNldrM4VqcMFlX5niuVlXnMQY3dOY6Fpfr6qcyIZJ8iHW_D5324RTE9IQW7Iah0OaQ28b5kORr3X-eUxBgt_qp2S4qOnUxvstVpmSvhU0JmeLPI5nyPcvQyVXKOM7nDOcIDH6bihMJveNbQuZ5wxEoz9EoKxFCxSK3S9c-kI0kIX55XsbWdw',
     joinedAt: new Date().toISOString(),
   };
 }

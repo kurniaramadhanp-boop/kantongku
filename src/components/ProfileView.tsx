@@ -17,8 +17,9 @@ interface ProfileViewProps {
   appSettings: AppSettings;
   onLogout: () => void;
   onResetData: () => void;
-  onSaveProfile: (name: string, avatarUrl: string) => void;
+  onSaveProfile: (name: string, avatarUrl: string) => Promise<void>;
   onSaveSettings: (settings: AppSettings) => void;
+  onChangePassword: (newPass: string) => Promise<void>;
 }
 
 export default function ProfileView({
@@ -27,7 +28,8 @@ export default function ProfileView({
   onLogout,
   onResetData,
   onSaveProfile,
-  onSaveSettings
+  onSaveSettings,
+  onChangePassword
 }: ProfileViewProps) {
   // Profile edit state
   const [editingName, setEditingName] = useState(false);
@@ -47,33 +49,47 @@ export default function ProfileView({
   // Settings state (local copy for immediate feedback)
   const [settings, setSettings] = useState<AppSettings>({ ...appSettings });
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
+    reader.onloadend = async () => {
       const result = reader.result as string;
-      setAvatarUrl(result);
-      onSaveProfile(userProfile.name, result);
+      try {
+        await onSaveProfile(userProfile.name, result);
+        setAvatarUrl(result);
+      } catch (err: any) {
+        alert("Gagal memperbarui foto profil: " + err.message);
+      }
     };
     reader.readAsDataURL(file);
   };
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     if (!nameInput.trim()) return;
-    onSaveProfile(nameInput.trim(), avatarUrl);
-    setEditingName(false);
+    try {
+      await onSaveProfile(nameInput.trim(), avatarUrl);
+      setEditingName(false);
+    } catch (err: any) {
+      alert("Gagal memperbarui nama profil: " + err.message);
+    }
   };
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!oldPass) return setPassMsg({ type: 'error', text: 'Masukkan kata sandi lama.' });
     if (newPass.length < 6) return setPassMsg({ type: 'error', text: 'Kata sandi baru minimal 6 karakter.' });
     if (newPass !== confirmPass) return setPassMsg({ type: 'error', text: 'Konfirmasi kata sandi tidak cocok.' });
-    // Simulated success (real impl would call Firebase updatePassword)
-    setPassMsg({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
-    setOldPass(''); setNewPass(''); setConfirmPass('');
-    setTimeout(() => { setPassMsg(null); setShowPasswordForm(false); }, 2000);
+    
+    try {
+      setPassMsg({ type: 'success', text: 'Sedang memperbarui kata sandi di Firebase...' });
+      await onChangePassword(newPass);
+      setPassMsg({ type: 'success', text: 'Kata sandi berhasil diperbarui!' });
+      setOldPass(''); setNewPass(''); setConfirmPass('');
+      setTimeout(() => { setPassMsg(null); setShowPasswordForm(false); }, 2000);
+    } catch (err: any) {
+      setPassMsg({ type: 'error', text: 'Gagal: ' + (err.message || 'Kesalahan Autentikasi') });
+    }
   };
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
