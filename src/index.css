@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-primary: #4edea3;
+  --color-primary-container: #10b981;
+  --color-secondary: #adc6ff;
+  --color-secondary-container: #0566d9;
+
+  --color-surface: #111827;
+  --color-surface-variant: #1f2937;
+  --color-on-surface: #f3f4f6;
+  --color-on-surface-variant: #9ca3af;
+  --color-outline: #374151;
+  --color-outline-variant: #4b5563;
+
+  /* Spacing Tokens */
+  --spacing-card_padding: 1.5rem;       /* 24px */
+  --spacing-container_margin: 1.5rem;   /* 24px */
+  --spacing-stack_gap_md: 1rem;         /* 16px */
+}
+
+.glow-border-primary {
+  box-shadow: 0 0 20px rgba(78, 222, 163, 0.08);
+  border: 1px solid rgba(78, 222, 163, 0.25);
+}
+
+body {
+  background-color: #0B111E;
+  color: #dde4dd;
+  font-family: var(--font-sans);
+}
+
+.glow-text-primary {
+  text-shadow: 0 0 10px rgba(78, 222, 163, 0.4);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(22, 30, 46, 0.75) 0%, rgba(22, 30, 46, 0.45) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glow-primary {
+  box-shadow: 0 0 20px rgba(78, 222, 163, 0.12);
+  border: 1px solid rgba(78, 222, 163, 0.3);
+}
+
+.glow-secondary {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.12);
+  border-left: 2px solid #3B82F6;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(78, 222, 163, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(78, 222, 163, 0.35);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

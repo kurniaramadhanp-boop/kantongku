@@ -1,0 +1,620 @@
+import React, { useState } from 'react';
+import { Pocket, Transaction, Notification, PocketType, UserProfile, Category } from '../types';
+import BrandLogo from './BrandLogo';
+import { formatRupiah, formatDate, getCategoryColorHex } from '../utils';
+import CategoryIcon from './CategoryIcon';
+import { 
+  RefreshCw, 
+  Bell, 
+  ArrowUpRight, 
+  ArrowDownLeft, 
+  ShieldCheck, 
+  Landmark, 
+  Store, 
+  Plus, 
+  Send, 
+  Receipt, 
+  BarChart3, 
+  Info, 
+  TrendingUp, 
+  AlertTriangle,
+  Wallet,
+  User,
+  Lock,
+  Coffee,
+  Dumbbell,
+  Briefcase,
+  Utensils,
+  Users,
+  CircleDollarSign,
+  Trash2,
+  Sliders,
+  Sparkles,
+  Heart,
+  PiggyBank,
+  CreditCard,
+  Coins,
+  ShoppingBag,
+  Home as HomeIcon,
+  Car,
+  Plane,
+  Gamepad2,
+  GraduationCap,
+  Gift,
+  X,
+  TrendingDown
+} from 'lucide-react';
+
+interface HomeDashboardProps {
+  pockets: Pocket[];
+  transactions: Transaction[];
+  notifications: Notification[];
+  userProfile: UserProfile;
+  categories: Category[];
+  onOpenAddModal: () => void;
+  onDeleteTransaction: (id: string) => void;
+  onPocketTransferSimulate: (from: PocketType, to: PocketType, amount: number) => void;
+  onChangeTab: (tab: string) => void;
+  onOpenPocketManager: () => void;
+  onOpenBudgetModal: () => void;
+  onEditTransactionSelect: (transaction: Transaction) => void;
+  onMarkAllNotificationsRead: () => void;
+  onOpenHistory: () => void;
+}
+
+export default function HomeDashboard({
+  pockets,
+  transactions,
+  notifications,
+  userProfile,
+  categories,
+  onOpenAddModal,
+  onDeleteTransaction,
+  onPocketTransferSimulate,
+  onChangeTab,
+  onOpenPocketManager,
+  onOpenBudgetModal,
+  onEditTransactionSelect,
+  onMarkAllNotificationsRead,
+  onOpenHistory
+}: HomeDashboardProps) {
+  const [selectedPocketId, setSelectedPocketId] = useState<string | null>(null);
+  const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferFrom, setTransferFrom] = useState<PocketType>('');
+  const [transferTo, setTransferTo] = useState<PocketType>('');
+  const [transferAmount, setTransferAmount] = useState<number>(0);
+  const [transferAmountDisplay, setTransferAmountDisplay] = useState<string>('');
+
+  // Sync transfer selected pockets when pockets change
+  React.useEffect(() => {
+    if (pockets.length > 0) {
+      if (!transferFrom || !pockets.some(p => p.id === transferFrom)) {
+        setTransferFrom(pockets[0].id);
+      }
+      if (!transferTo || !pockets.some(p => p.id === transferTo) || (transferTo === pockets[0].id && pockets.length > 1)) {
+        setTransferTo(pockets[1]?.id || pockets[0].id);
+      }
+    }
+  }, [pockets, transferFrom, transferTo]);
+
+  // Calculate dynamic totals
+  const totalBalance = pockets.reduce((sum, p) => sum + p.balance, 0);
+
+  // Calculate trend percentage over the last 30 days
+  const getTrendPercentage = () => {
+    if (transactions.length === 0) return 0;
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    // Filter transactions that occurred in the last 30 days
+    const recentTrans = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+    
+    // Calculate net change in the last 30 days
+    const recentChange = recentTrans.reduce((sum, t) => {
+      const delta = t.type === 'incoming' ? t.amount : -t.amount;
+      return sum + delta;
+    }, 0);
+
+    const balanceBefore30Days = totalBalance - recentChange;
+    if (balanceBefore30Days <= 0) {
+      return balanceBefore30Days === 0 && totalBalance > 0 ? 100 : 0;
+    }
+
+    return Number(((recentChange / balanceBefore30Days) * 100).toFixed(1));
+  };
+
+  const trendPercent = getTrendPercentage();
+
+  const unreadNotifCount = notifications.filter(n => !n.isRead).length;
+
+  const getCategoryIcon = (category: string) => {
+    const cat = categories.find(c => c.id === category);
+    if (!cat) return <Receipt className="w-5 h-5 text-zinc-400" />;
+    const colorHex = getCategoryColorHex(cat.color);
+    return <CategoryIcon name={cat.icon} className="w-5 h-5" style={{ color: colorHex }} />;
+  };
+
+  const getPocketIconComponent = (iconName: string) => {
+    switch (iconName) {
+      case 'group':
+        return Users;
+      case 'storefront':
+        return Store;
+      case 'coffee':
+        return Coffee;
+      case 'heart':
+        return Heart;
+      case 'sparkles':
+        return Sparkles;
+      case 'piggy':
+        return PiggyBank;
+      case 'creditcard':
+        return CreditCard;
+      case 'coins':
+        return Coins;
+      case 'shopping':
+        return ShoppingBag;
+      case 'home':
+        return HomeIcon;
+      case 'car':
+        return Car;
+      case 'plane':
+        return Plane;
+      case 'game':
+        return Gamepad2;
+      case 'education':
+        return GraduationCap;
+      case 'food':
+        return Utensils;
+      case 'gift':
+        return Gift;
+      case 'briefcase':
+        return Briefcase;
+      default:
+        return Wallet;
+    }
+  };
+
+  const getPocketColorHexAndTextClass = (colorName: string) => {
+    switch (colorName) {
+      case 'indigo':
+        return { hex: '#3B82F6', textClass: 'text-blue-400' };
+      case 'amber':
+        return { hex: '#F59E0B', textClass: 'text-amber-400' };
+      case 'rose':
+        return { hex: '#EF4444', textClass: 'text-rose-400' };
+      case 'purple':
+        return { hex: '#8B5CF6', textClass: 'text-purple-400' };
+      case 'teal':
+        return { hex: '#14B8A6', textClass: 'text-teal-400' };
+      case 'orange':
+        return { hex: '#F97316', textClass: 'text-orange-400' };
+      case 'cyan':
+        return { hex: '#06B6D4', textClass: 'text-cyan-400' };
+      case 'pink':
+        return { hex: '#EC4899', textClass: 'text-pink-400' };
+      case 'yellow':
+        return { hex: '#EAB308', textClass: 'text-yellow-400' };
+      case 'sky':
+        return { hex: '#0EA5E9', textClass: 'text-sky-400' };
+      case 'lime':
+        return { hex: '#84CC16', textClass: 'text-lime-400' };
+      default:
+        return { hex: '#10B981', textClass: 'text-emerald-400' };
+    }
+  };
+
+  const handleTransferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (transferFrom === transferTo) {
+      alert('Kantong asal dan tujuan harus berbeda');
+      return;
+    }
+    if (transferAmount <= 0) {
+      alert('Ketik nominal transfer yang valid');
+      return;
+    }
+    onPocketTransferSimulate(transferFrom, transferTo, transferAmount);
+    setTransferAmount(0);
+    setTransferModalOpen(false);
+  };
+
+  return (
+    <div className="flex flex-col gap-5 relative select-none">
+      
+      {/* HEADER BAR (Verbatim mockups) */}
+      <header className="flex justify-between items-center w-full bg-transparent z-40 relative pt-1 pb-1 md:justify-end md:pt-0">
+        <div className="flex items-center gap-3 md:hidden">
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 flex-shrink-0">
+            <img 
+              alt="User Avatar" 
+              className="w-full h-full object-cover" 
+              src={userProfile.avatarUrl}
+            />
+          </div>
+          <div>
+            <p className="font-label-caps text-[10px] text-on-surface-variant/60 uppercase tracking-widest">
+              Welcome back,
+            </p>
+            <h1 className="font-headline-sm text-white text-base font-semibold leading-tight">
+              Halo, {userProfile.name}
+            </h1>
+          </div>
+        </div>
+
+        {/* NOTIFICATION BUTTON */}
+        <div className="relative">
+          <button
+            onClick={() => {
+              const newOpen = !isNotifOpen;
+              setIsNotifOpen(newOpen);
+              if (newOpen) {
+                onMarkAllNotificationsRead();
+              }
+            }}
+            className="w-10 h-10 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary hover:bg-white/5 transition-colors relative"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadNotifCount > 0 && (
+              <span className="absolute top-2 right-2 w-2.5 h-2.5 bg-rose-500 rounded-full border border-background animate-pulse" />
+            )}
+          </button>
+
+          {/* NOTIFICATION PANEL DRAWER */}
+          {isNotifOpen && (
+            <div className="absolute right-0 mt-3 w-80 glass-card rounded-xl p-4 z-50 border border-white/10 shadow-2xl flex flex-col gap-3">
+              <div className="flex justify-between items-center border-b border-white/5 pb-2">
+                <span className="font-label-caps text-xs text-primary uppercase">Notifikasi</span>
+                <span className="text-[10px] text-on-surface-variant font-mono-data">{unreadNotifCount} baru</span>
+              </div>
+              <div className="flex flex-col gap-2 max-h-60 overflow-y-auto no-scrollbar">
+                {notifications.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant/40 py-4 text-center">Tidak ada notifikasi baru</p>
+                ) : (
+                  notifications.map(notif => (
+                    <div 
+                      key={notif.id} 
+                      className={`p-2.5 rounded-lg text-xs flex flex-col gap-1 ${notif.type === 'warning' ? 'bg-[#EF4444]/10 border-l-2 border-l-[#EF4444]' : 'bg-primary/5 border-l-2 border-l-primary'}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-white flex items-center gap-1">
+                          {notif.type === 'warning' && <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />}
+                          {notif.title}
+                        </span>
+                        <span className="text-[9px] text-on-surface-variant/50">{notif.time}</span>
+                      </div>
+                      <p className="text-on-surface-variant text-[11px] leading-relaxed">{notif.message}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Dasbor Actions Header Row */}
+      <div className="flex justify-end w-full">
+        {/* MANAGE POCKETS BUTTON */}
+        <button
+          onClick={onOpenPocketManager}
+          className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:border-primary/40 hover:bg-white/10 text-xs font-bold font-label-caps text-on-surface-variant hover:text-white rounded-xl transition-all active:scale-95"
+        >
+          <Sliders className="w-3.5 h-3.5 text-primary" />
+          Kelola Kantong
+        </button>
+      </div>
+
+      {/* GRID RESPONSIVE DASHBOARD LAYOUT */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start w-full min-w-0">
+        
+        {/* LEFT COLUMN: Pockets & Quick Actions */}
+        <div className="lg:col-span-7 flex flex-col gap-6 w-full min-w-0">
+
+              {/* Hero Section: Total Balance */}
+              <section className="glass-card rounded-xl p-card_padding glow-primary relative overflow-hidden flex flex-col gap-2">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+                <p className="font-label-caps text-on-surface-variant uppercase flex items-center gap-[12px]">
+                  <Wallet className="w-5 h-5 text-primary" />
+                  Total Saldo Seluruhnya
+                </p>
+                <h2 className="font-display-lg text-primary tracking-tight glow-text-primary">
+                  {formatRupiah(totalBalance)}
+                </h2>
+                <div className="flex items-center gap-2 mt-1">
+                  {trendPercent > 0 && (
+                    <span className="px-2 py-0.5 bg-primary/10 text-primary rounded font-mono-data text-xs flex items-center gap-1 border border-primary/20">
+                      <TrendingUp className="w-3 h-3" /> +{trendPercent}%
+                    </span>
+                  )}
+                  {trendPercent < 0 && (
+                    <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 rounded font-mono-data text-xs flex items-center gap-1 border border-rose-500/20">
+                      <TrendingDown className="w-3 h-3" /> {trendPercent}%
+                    </span>
+                  )}
+                  {trendPercent === 0 && (
+                    <span className="px-2 py-0.5 bg-white/5 text-on-surface-variant rounded font-mono-data text-xs flex items-center gap-1 border border-white/10">
+                      0.0%
+                    </span>
+                  )}
+                  <span className="text-on-surface-variant text-xs">dari bulan lalu</span>
+                </div>
+              </section>
+
+              {/* Sub Pockets dynamically rendered as a horizontally scrollable carousel */}
+              <div className="w-full overflow-x-auto pb-2 pt-1 flex gap-3 no-scrollbar scroll-smooth snap-x">
+                {pockets.map(p => {
+                  const IconComponent = getPocketIconComponent(p.icon);
+                  const { hex: colorHex, textClass: colorTextClass } = getPocketColorHexAndTextClass(p.color);
+                  const isSelected = selectedPocketId === p.id;
+                  
+                  // Ring classes for selected states
+                  let activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#10B981]';
+                  if (p.color === 'indigo') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#3B82F6]';
+                  else if (p.color === 'amber') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F59E0B]';
+                  else if (p.color === 'rose') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EF4444]';
+                  else if (p.color === 'purple') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#8B5CF6]';
+                  else if (p.color === 'teal') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#14B8A6]';
+                  else if (p.color === 'orange') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F97316]';
+                  else if (p.color === 'cyan') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#06B6D4]';
+                  else if (p.color === 'pink') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EC4899]';
+                  else if (p.color === 'yellow') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EAB308]';
+                  else if (p.color === 'sky') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#0EA5E9]';
+                  else if (p.color === 'lime') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#84CC16]';
+
+                  return (
+                    <div 
+                      key={p.id} 
+                      onClick={() => setSelectedPocketId(isSelected ? null : p.id)}
+                      className={`glass-card rounded-xl p-3.5 flex flex-col gap-0.5 border-l-2 shrink-0 w-[155px] sm:w-[175px] relative snap-start hover:bg-white/5 cursor-pointer transition-all duration-200 select-none ${isSelected ? activeRingClass : 'border-white/5'}`}
+                      style={{ borderLeftColor: colorHex }}
+                    >
+                      <div className="absolute top-3.5 right-3.5" style={{ color: colorHex + 'd1' }}>
+                        <IconComponent className="w-4 h-4" />
+                      </div>
+                      <p className={`text-[10px] font-bold uppercase tracking-wider truncate pr-6 ${colorTextClass}`}>
+                        {p.name}
+                      </p>
+                      <p className="text-md font-bold text-white font-mono mt-0.5">{formatRupiah(p.balance)}</p>
+                      <span className="text-[9px] text-on-surface-variant/50 italic truncate mt-0.5 block">{p.tag}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Quick Action Matrix grid */}
+              <section className="py-2">
+                <div className="flex justify-between items-center gap-2">
+                  <button 
+                    onClick={onOpenAddModal}
+                    className="flex flex-col items-center gap-2 group w-full"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/20 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                      <Plus className="w-6 h-6" />
+                    </div>
+                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Add Dana</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => setTransferModalOpen(true)}
+                    className="flex flex-col items-center gap-2 group w-full"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Transfer</span>
+                  </button>
+
+                  <button 
+                    onClick={onOpenBudgetModal}
+                    className="flex flex-col items-center gap-2 group w-full"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                      <Receipt className="w-5 h-5" />
+                    </div>
+                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Jatah Jajan</span>
+                  </button>
+
+                  <button 
+                    onClick={() => onChangeTab('activity')}
+                    className="flex flex-col items-center gap-2 group w-full"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-[#3B82F6] group-hover:bg-[#3B82F6]/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(59,130,246,0.05)]">
+                      <BarChart3 className="w-5 h-5" />
+                    </div>
+                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Laporan WA</span>
+                  </button>
+                </div>
+              </section>
+
+        </div>
+
+        {/* RIGHT COLUMN: Recent Transactions */}
+        <div className="lg:col-span-5 flex flex-col gap-6 w-full min-w-0">
+          {/* RECENT TRANSACTIONS SECTIONS */}
+          <section className="flex flex-col gap-3">
+            <div className="flex justify-between items-center border-b border-white/5 pb-2">
+              <div className="flex items-center gap-2 max-w-[70%]">
+                <h3 className="font-headline-sm text-lg text-white truncate">
+                  {selectedPocketId ? 'Aktivitas Kantong' : 'Aktivitas Terakhir'}
+                </h3>
+                {selectedPocketId && (
+                  <button 
+                    onClick={() => setSelectedPocketId(null)}
+                    className="px-2 py-0.5 bg-primary/10 border border-primary/20 text-primary text-[10.5px] rounded-full flex items-center gap-1 hover:bg-primary/20 transition-all font-semibold font-sans active:scale-95 shrink-0"
+                    title="Hapus filter"
+                  >
+                    <span className="truncate max-w-[80px]">
+                      {pockets.find(p => p.id === selectedPocketId)?.name}
+                    </span>
+                    <X className="w-3 h-3 text-primary shrink-0" />
+                  </button>
+                )}
+              </div>
+              <button 
+                onClick={onOpenHistory}
+                className="font-label-caps text-xs text-primary hover:opacity-80 transition-opacity shrink-0"
+              >
+                Lihat Semua
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3 select-none max-h-[360px] lg:max-h-[500px] overflow-y-auto no-scrollbar">
+              {(() => {
+                const filteredTrans = selectedPocketId 
+                  ? transactions.filter(t => t.pocketId === selectedPocketId)
+                  : transactions;
+                const displayedTrans = filteredTrans.slice(0, 5);
+
+                if (filteredTrans.length === 0) {
+                  return (
+                    <div className="text-center py-12 text-on-surface-variant/40 flex flex-col items-center gap-2">
+                      <Receipt className="w-10 h-10 text-on-surface-variant/30" />
+                      <p className="text-xs">Tidak ada riwayat transaksi di kantong ini</p>
+                    </div>
+                  );
+                }
+
+                return displayedTrans.map(t => {
+                  const sign = t.type === 'incoming' ? '+' : '-';
+                  const isExpense = t.type === 'outgoing';
+                  const pocket = pockets.find(p => p.id === t.pocketId);
+                  const pocketLabel = pocket ? pocket.name : 'Kantong Lainnya';
+
+                  const catColorClass = isExpense ? 'text-[#EF4444]' : 'text-primary';
+
+                  return (
+                    <div 
+                      key={t.id}
+                      id={`transaksi-${t.id}`}
+                      onClick={() => onEditTransactionSelect(t)}
+                      className="glass-card rounded-xl p-3 flex justify-between items-center hover:bg-white/5 transition-all group relative cursor-pointer"
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-on-surface-variant group-hover:scale-105 transition-transform shrink-0">
+                          {getCategoryIcon(t.category)}
+                        </div>
+                        <div>
+                          <p className="font-body-md text-white font-medium">{t.title}</p>
+                          <p className="text-[11px] text-on-surface-variant">
+                            {pocketLabel} • <span className="font-mono-data text-[10px]">{formatDate(t.date)}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className={`font-mono-data font-bold ${catColorClass}`}>
+                          {sign}{formatRupiah(t.amount, false)}
+                        </span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if ((window as any).hapusDataPermanen) {
+                              (window as any).hapusDataPermanen('Daftar_Transaksi', t.id, `transaksi-${t.id}`);
+                            } else {
+                              if (confirm(`Apakah Anda yakin ingin menghapus transaksi "${t.title}"?`)) {
+                                onDeleteTransaction(t.id);
+                              }
+                            }
+                          }}
+                          className="p-1 text-on-surface-variant/50 hover:text-[#EF4444] transition-all"
+                          title="Hapus transaksi"
+                        >
+                          <Trash2 className="w-[18px] h-[18px]" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </section>
+        </div>
+
+      </div>
+
+      {/* SIMULATE INTERNAL POCKET TRANSFER MODAL DIALOG */}
+      {transferModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setTransferModalOpen(false)} />
+          <div className="relative glass-card rounded-xl p-card_padding w-full max-w-sm border border-white/10 z-10">
+            <h3 className="font-headline-sm text-white mb-4 flex items-center gap-2">
+              <Landmark className="w-5 h-5 text-primary" />
+              Transfer Antar Kantong
+            </h3>
+            
+            <form onSubmit={handleTransferSubmit} className="flex flex-col gap-4">
+              <div className="flex justify-between items-center gap-2">
+                <div className="flex flex-col gap-1 w-full">
+                  <label className="text-[10px] font-label-caps text-on-surface-variant uppercase">Dari</label>
+                  <select 
+                    value={transferFrom}
+                    onChange={(e) => setTransferFrom(e.target.value)}
+                    className="h-10 bg-[#0B111E] rounded-lg text-xs text-white border border-white/10 focus:outline-none focus:border-primary px-2"
+                  >
+                    {pockets.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <span className="text-on-surface-variant/35 mt-4">➔</span>
+
+                <div className="flex flex-col gap-1 w-full">
+                  <label className="text-[10px] font-label-caps text-on-surface-variant uppercase">Ke</label>
+                  <select 
+                    value={transferTo}
+                    onChange={(e) => setTransferTo(e.target.value)}
+                    className="h-10 bg-[#0B111E] rounded-lg text-xs text-white border border-white/10 focus:outline-none focus:border-primary px-2"
+                  >
+                    {pockets.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-label-caps text-on-surface-variant uppercase">Nominal Transfer</label>
+                <div className="relative flex items-center">
+                  <span className="absolute left-3.5 font-bold text-primary font-mono-data text-xs">Rp</span>
+                  <input 
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
+                    required
+                    value={transferAmountDisplay}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/\D/g, '');
+                      setTransferAmount(raw ? Number(raw) : 0);
+                      setTransferAmountDisplay(raw ? new Intl.NumberFormat('id-ID').format(Number(raw)) : '');
+                    }}
+                    className="h-10 bg-surface rounded-lg w-full text-xs text-white border border-white/10 focus:outline-none focus:border-primary pl-9 pr-2 font-mono-data"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => setTransferModalOpen(false)}
+                  className="w-full h-10 rounded-lg text-xs font-label-caps bg-white/5 border border-white/10 text-on-surface-variant hover:text-white"
+                >
+                  Batal
+                </button>
+                <button 
+                  type="submit"
+                  className="w-full h-10 rounded-lg text-xs font-label-caps bg-primary text-on-primary font-bold shadow-[0_2px_10px_rgba(78,222,163,0.2)]"
+                >
+                  Transfer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
