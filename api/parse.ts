@@ -4,7 +4,7 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-async function generateContentWithRetry(options: any, maxRetries = 2) {
+async function generateContentWithRetry(aiInstance: any, options: any, maxRetries = 2) {
   let attempt = 0;
   // Menyesuaikan model rilis stabil terkini untuk performa terbaik
   const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -12,7 +12,7 @@ async function generateContentWithRetry(options: any, maxRetries = 2) {
   while (true) {
     try {
       const currentModel = modelsToTry[Math.min(attempt, modelsToTry.length - 1)];
-      const response = await ai.models.generateContent({
+      const response = await aiInstance.models.generateContent({
         ...options,
         model: currentModel
       });
@@ -51,8 +51,21 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Input teks tidak boleh kosong" });
     }
 
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(401).json({ error: "API Key Gemini tidak ditemukan. Harap atur di tab Profil." });
+    }
+    const aiInstance = new GoogleGenAI({
+      apiKey: apiKey as string,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
     // Perbaikan struktur parameter payload sesuai standar SDK @google/genai terbaru
-    const response = await generateContentWithRetry({
+    const response = await generateContentWithRetry(aiInstance, {
       model: "gemini-2.5-flash",
       contents: [
         {

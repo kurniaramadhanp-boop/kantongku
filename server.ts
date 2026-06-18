@@ -23,7 +23,7 @@ const ai = new GoogleGenAI({
 });
 
 // Robust helper with retries and fallback models for high demand or transient API failures
-async function generateContentWithRetry(options: any, maxRetries = 2) {
+async function generateContentWithRetry(aiInstance: any, options: any, maxRetries = 2) {
   let attempt = 0;
   // Menyesuaikan dengan daftar model stabil terbaru yang dikenali SDK baru
   const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -33,7 +33,7 @@ async function generateContentWithRetry(options: any, maxRetries = 2) {
       const currentModel = modelsToTry[Math.min(attempt, modelsToTry.length - 1)];
       console.log(`[Gemini API] Attempt ${attempt + 1}: calling model ${currentModel}`);
       
-      const response = await ai.models.generateContent({
+      const response = await aiInstance.models.generateContent({
         ...options,
         model: currentModel
       });
@@ -71,8 +71,21 @@ app.post("/api/parse", async (req, res) => {
       return res.status(400).json({ error: "Input teks tidak boleh kosong" });
     }
 
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(401).json({ error: "API Key Gemini tidak ditemukan. Harap atur di tab Profil." });
+    }
+    const aiInstance = new GoogleGenAI({
+      apiKey: apiKey as string,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
     // PERBAIKAN: Struktur parameter 'contents' disesuaikan dengan aturan @google/genai terbaru
-    const response = await generateContentWithRetry({
+    const response = await generateContentWithRetry(aiInstance, {
       model: "gemini-2.5-flash",
       contents: [
         {
@@ -113,13 +126,38 @@ app.post("/api/parse-media", async (req, res) => {
       return res.status(400).json({ error: "Data media dan tipeMedia wajib disertakan" });
     }
 
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(401).json({ error: "API Key Gemini tidak ditemukan. Harap atur di tab Profil." });
+    }
+    const aiInstance = new GoogleGenAI({
+      apiKey: apiKey as string,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    if (tipeMedia === "text/json") {
+      const payloadObj = JSON.parse(mediaData);
+      const promptLengkap = `${payloadObj.instruksi}\n\nData Transaksi Terfilter:\n${JSON.stringify(payloadObj.data_transaksi, null, 2)}`;
+
+      const response = await generateContentWithRetry(aiInstance, {
+        model: "gemini-2.5-flash",
+        contents: promptLengkap
+      });
+
+      return res.json({ analisis_laporan_wa: response.text || "" });
+    }
+
     let cleanBase64 = mediaData;
     if (mediaData.includes(";base64,")) {
       cleanBase64 = mediaData.split(";base64,")[1];
     }
 
     // PERBAIKAN: Menggunakan model stabil 'gemini-2.5-flash' dan skema tipe string
-    const response = await generateContentWithRetry({
+    const response = await generateContentWithRetry(aiInstance, {
       model: "gemini-2.5-flash",
       contents: [
         {
@@ -145,9 +183,10 @@ app.post("/api/parse-media", async (req, res) => {
             kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
             catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
             sumber_dana: { type: "STRING", description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
-            kepemilikan: { type: "STRING", description: "Pilih wajib antara: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." }
+            kepemilikan: { type: "STRING", description: "Pilih wajib antara: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." },
+            tipe: { type: "STRING", description: "Pilih wajib antara: 'pemasukan' atau 'pengeluaran'." }
           },
-          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan"]
+          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan", "tipe"]
         }
       }
     });

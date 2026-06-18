@@ -5,7 +5,7 @@ import CategoryIcon from './CategoryIcon';
 import {
   Search, SlidersHorizontal, ChevronDown, Calendar, Tag, Wallet, 
   ArrowDownLeft, ArrowUpRight, Receipt, Edit3, Trash2, RotateCcw, 
-  ChevronLeft, Loader, Send
+  ChevronLeft, Send
 } from 'lucide-react';
 
 interface TransactionHistoryPageProps {
@@ -37,7 +37,6 @@ export default function TransactionHistoryPage({
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [showFilters, setShowFilters] = useState(!!initialFilter?.category);
-  const [analyzingAI, setAnalyzingAI] = useState(false);
 
   const getCategoryHexColor = (catId: string) => {
     const cat = categories.find(c => c.id === catId);
@@ -71,66 +70,31 @@ export default function TransactionHistoryPage({
     setSearch(''); setDateFrom(''); setDateTo(''); setSelectedCategories([]); setSelectedPockets([]); setSelectedAccounts([]); setTypeFilter('all');
   };
 
-  const handleExportWAWithAI = async () => {
+  const handleExportWA = () => {
     if (filteredTransactions.length === 0) return alert("Tidak ada data terfilter.");
-    setAnalyzingAI(true);
     
-    // PEMBENAHAN TOTAL: Susun objek JSON murni agar sesuai dengan backend `JSON.parse(mediaData)`
-    const payloadKirim = {
-      instruksi: 
-        "Kamu adalah Expert Financial Advisor untuk aplikasi KantongKu. Buatlah analisis laporan keuangan eksekutif " +
-        "yang mendalam, tajam, dan TERSUSUN RAPI TEGAK LURUS KE BAWAH khusus untuk dibaca di WhatsApp.\n\n" +
-        "ATURAN FORMAT WA:\n" +
-        "• Gunakan tanda bintang (*) untuk menebalkan poin penting.\n" +
-        "• Ringkas total pemasukan, pengeluaran, dan arus kas bersih di baris atas.\n" +
-        "• Analisis secara kritis kategori apa saja yang paling banyak memakan pengeluaran beserta nominal dan persentasenya.\n" +
-        "• Berikan saran perbaikan budget konkret untuk minggu depan.\n" +
-        "• Wajib tutup baris paling akhir laporan dengan kalimat: laporan otomatis aplikasi KantongKu",
-      data_transaksi: filteredTransactions.slice(0, 35).map(t => ({
-        nama: t.title,
-        nominal: t.amount,
-        tipe: t.type === 'incoming' ? 'Masuk' : 'Keluar',
-        kategori: categories.find(c => c.id === t.category)?.name || 'Lain-lain',
-        tanggal: t.date.split('T')[0]
-      }))
-    };
+    // Format: Nama Transaksi | Waktu | Nominal +/-
+    const transLines = filteredTransactions.map(t => {
+      const sign = t.type === 'outgoing' ? '-' : '+';
+      const formattedAmount = formatRupiah(t.amount, false);
+      return `${t.title} | ${formatDate(t.date)} | ${sign}${formattedAmount}`;
+    }).join('\n');
 
-    try {
-      const savedSettings = localStorage.getItem('kantongku_settings');
-      const settings = savedSettings ? JSON.parse(savedSettings) : {};
-      const apiKey = settings.geminiApiKey || '';
+    const totalIncoming = filteredTransactions.filter(t => t.type === 'incoming').reduce((s, t) => s + t.amount, 0);
+    const totalOutgoing = filteredTransactions.filter(t => t.type === 'outgoing').reduce((s, t) => s + t.amount, 0);
+    const netCashFlow = totalIncoming - totalOutgoing;
 
-      const response = await fetch('/api/parse-media', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey
-        },
-        body: JSON.stringify({
-          mediaData: JSON.stringify(payloadKirim), // Dikirim sebagai string JSON yang valid
-          tipeMedia: 'text/json'
-        })
-      });
+    const reportText = 
+      `*ANALISIS LAPORAN TRANSAKSI*\n` +
+      `-------------------------------------\n` +
+      `${transLines}\n` +
+      `-------------------------------------\n` +
+      `• *Jumlah Arus Masuk* : Rp ${formatRupiah(totalIncoming, false)}\n` +
+      `• *Jumlah Arus Keluar* : Rp ${formatRupiah(totalOutgoing, false)}\n` +
+      `• *Arus Kas Bersih* : ${netCashFlow >= 0 ? '+' : '-'}Rp ${formatRupiah(Math.abs(netCashFlow), false)}\n\n` +
+      `laporan otomatis aplikasi KantongKu`;
 
-      if (!response.ok) throw new Error("Gagal meracik laporan via AI");
-      const result = await response.json();
-      
-      const hasilTeksLaporan = result.analisis_laporan_wa || "Laporan tidak tersedia dari asisten AI.";
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(hasilTeksLaporan)}`, '_blank');
-    } catch (err) {
-      console.error(err);
-      // Fallback cadangan instan lokal terstruktur jika koneksi bermasalah
-      const backupText = 
-        `*LAPORAN FINANSIAL KANTONGKU*\n` +
-        `-------------------------------------\n` +
-        `• *Total Masuk* : Rp ${totalIncoming.toLocaleString('id-ID')}\n` +
-        `• *Total Keluar* : Rp ${totalOutgoing.toLocaleString('id-ID')}\n` +
-        `• *Arus Kas Bersih* : Rp ${(totalIncoming - totalOutgoing).toLocaleString('id-ID')}\n\n` +
-        `laporan otomatis aplikasi KantongKu`;
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(backupText)}`, '_blank');
-    } finally {
-      setAnalyzingAI(false);
-    }
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(reportText)}`, '_blank');
   };
 
   return (
@@ -198,8 +162,8 @@ export default function TransactionHistoryPage({
         )}
       </div>
 
-      <button onClick={handleExportWAWithAI} className="w-full h-12 bg-primary text-black font-bold text-xs font-label-caps uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99]">
-         {analyzingAI ? <Loader className="animate-spin w-4 h-4"/> : <Send className="w-4 h-4"/>} Kirim Analisis Laporan Cerdas AI ke WA
+      <button onClick={handleExportWA} className="w-full h-12 bg-primary text-black font-bold text-xs font-label-caps uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99]">
+         <Send className="w-4 h-4"/> Kirim Analisis Laporan
       </button>
 
       {/* List Rendering Transaksi */}

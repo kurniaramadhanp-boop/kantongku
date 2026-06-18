@@ -4,7 +4,7 @@ const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
-async function generateContentWithRetry(options: any, maxRetries = 2) {
+async function generateContentWithRetry(aiInstance: any, options: any, maxRetries = 2) {
   let attempt = 0;
   // Menyesuaikan model rilis stabil terkini untuk performa terbaik
   const modelsToTry = [options.model, "gemini-2.5-flash", "gemini-1.5-flash"];
@@ -12,7 +12,7 @@ async function generateContentWithRetry(options: any, maxRetries = 2) {
   while (true) {
     try {
       const currentModel = modelsToTry[Math.min(attempt, modelsToTry.length - 1)];
-      const response = await ai.models.generateContent({
+      const response = await aiInstance.models.generateContent({
         ...options,
         model: currentModel
       });
@@ -51,13 +51,38 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Data media dan tipeMedia wajib disertakan" });
     }
 
+    const apiKey = req.headers['x-api-key'] || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      return res.status(401).json({ error: "API Key Gemini tidak ditemukan. Harap atur di tab Profil." });
+    }
+    const aiInstance = new GoogleGenAI({
+      apiKey: apiKey as string,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    if (tipeMedia === "text/json") {
+      const payloadObj = JSON.parse(mediaData);
+      const promptLengkap = `${payloadObj.instruksi}\n\nData Transaksi Terfilter:\n${JSON.stringify(payloadObj.data_transaksi, null, 2)}`;
+
+      const response = await generateContentWithRetry(aiInstance, {
+        model: "gemini-2.5-flash",
+        contents: promptLengkap
+      });
+
+      return res.status(200).json({ analisis_laporan_wa: response.text || "" });
+    }
+
     let cleanBase64 = mediaData;
     if (mediaData.includes(";base64,")) {
       cleanBase64 = mediaData.split(";base64,")[1];
     }
 
     // Menggunakan parameter generateContent yang sesuai standar SDK @google/genai terbaru
-    const response = await generateContentWithRetry({
+    const response = await generateContentWithRetry(aiInstance, {
       model: "gemini-2.5-flash", 
       contents: [
         {
@@ -74,7 +99,7 @@ export default async function handler(req: any, res: any) {
         }
       ],
       config: {
-        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
+        systemInstruction: "Kamu adalah mesin parser JSON untuk aplikasi KantongKu. Tugasmu adalah menerima input (teks ucapan, transkrip suara, atau foto struk) dari user, lalu mengubahnya menjadi format transaksi terstruktur yang siap dimasukkan ke database Firebase. Wajib keluarkan data dalam bentuk JSON mentah yang valid. PENTING: Jika audio tidak terdengar jelas, kosong, atau gambar tidak mengandung transaksi, JANGAN mengarang data. Kembalikan nominal 0, catatan 'Tidak terdeteksi', dan kategori 'Lainnya'.",
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -82,9 +107,11 @@ export default async function handler(req: any, res: any) {
             nominal: { type: "INTEGER", description: "Jumlah uang dalam bentuk angka integer. Jika tidak ada, isi 0." },
             kategori: { type: "STRING", description: "Kategori pengeluaran/pemasukan. Jika tidak tahu, isi 'Lainnya'." },
             catatan: { type: "STRING", description: "Keterangan singkat tentang transaksi. Jika suara tidak jelas, tulis 'Tidak terdeteksi'." },
+            sumber_dana: { type: "STRING", description: "Sumber dana (Bank_BCA / Dana / GoPay / Cash). Default: 'Cash'." },
+            kepemilikan: { type: "STRING", description: "Pilih wajib antara: 'Uangku' (pribadi), 'Uang Orang' (grup/kas), atau 'Uang Bisnis'." },
             tipe: { type: "STRING", description: "Pilih wajib antara: 'pemasukan' atau 'pengeluaran'." }
           },
-          required: ["nominal", "kategori", "catatan", "tipe"]
+          required: ["nominal", "kategori", "catatan", "sumber_dana", "kepemilikan", "tipe"]
         }
       }
     });
