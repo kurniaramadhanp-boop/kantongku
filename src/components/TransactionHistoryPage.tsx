@@ -3,8 +3,9 @@ import { Transaction, Pocket, Account, Category } from '../types';
 import { formatRupiah, formatDate, getCategoryColorHex } from '../utils';
 import CategoryIcon from './CategoryIcon';
 import {
-  X, Search, Filter, Calendar, Wallet, Tag, ArrowDownLeft, ArrowUpRight,
-  Receipt, Trash2, Edit3, ChevronDown, SlidersHorizontal, RotateCcw, ChevronLeft
+  Search, SlidersHorizontal, ChevronDown, Calendar, Tag, Wallet, 
+  ArrowDownLeft, ArrowUpRight, Receipt, Edit3, Trash2, RotateCcw, 
+  ChevronLeft, Loader, Send
 } from 'lucide-react';
 
 interface TransactionHistoryPageProps {
@@ -31,349 +32,197 @@ export default function TransactionHistoryPage({
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    initialFilter?.category ? [initialFilter.category] : []
-  );
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(initialFilter?.category ? [initialFilter.category] : []);
   const [selectedPockets, setSelectedPockets] = useState<string[]>([]);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [typeFilter, setTypeFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [showFilters, setShowFilters] = useState(!!initialFilter?.category);
+  const [analyzingAI, setAnalyzingAI] = useState(false);
 
-  const getCategoryColorClasses = (catId: string) => {
+  const getCategoryHexColor = (catId: string) => {
     const cat = categories.find(c => c.id === catId);
-    const hex = cat ? getCategoryColorHex(cat.color) : '#64748B';
-    return hex;
+    return cat ? getCategoryColorHex(cat.color) : '#64748B';
   };
 
+  // Logic Opsi Penyaringan Tingkat Lanjut
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      // Keyword search
-      if (search) {
-        const lower = search.toLowerCase();
-        if (!t.title.toLowerCase().includes(lower) && !t.notes?.toLowerCase().includes(lower)) return false;
-      }
-      // Date from
-      if (dateFrom) {
-        const fromDate = new Date(dateFrom);
-        fromDate.setHours(0, 0, 0, 0);
-        if (new Date(t.date) < fromDate) return false;
-      }
-      // Date to
-      if (dateTo) {
-        const toDate = new Date(dateTo);
-        toDate.setHours(23, 59, 59, 999);
-        if (new Date(t.date) > toDate) return false;
-      }
-      // Category filter
+      if (search && !t.title.toLowerCase().includes(search.toLowerCase()) && !t.notes?.toLowerCase().includes(search.toLowerCase())) return false;
+      if (dateFrom && new Date(t.date) < new Date(dateFrom)) return false;
+      if (dateTo && new Date(t.date) > new Date(dateTo)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(t.category)) return false;
-      // Pocket filter
       if (selectedPockets.length > 0 && !selectedPockets.includes(t.pocketId)) return false;
-      // Account filter
       if (selectedAccounts.length > 0 && !selectedAccounts.includes(t.accountId)) return false;
-      // Type filter
       if (typeFilter !== 'all' && t.type !== typeFilter) return false;
       return true;
     }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [transactions, search, dateFrom, dateTo, selectedCategories, selectedPockets, selectedAccounts, typeFilter]);
 
-  const totalIncoming = filteredTransactions.filter((t: Transaction) => t.type === 'incoming').reduce((s: number, t: Transaction) => s + t.amount, 0);
-  const totalOutgoing = filteredTransactions.filter((t: Transaction) => t.type === 'outgoing').reduce((s: number, t: Transaction) => s + t.amount, 0);
+  const totalIncoming = filteredTransactions.filter(t => t.type === 'incoming').reduce((s, t) => s + t.amount, 0);
+  const totalOutgoing = filteredTransactions.filter(t => t.type === 'outgoing').reduce((s, t) => s + t.amount, 0);
 
-  const toggleCategory = (id: string) => {
-    setSelectedCategories((prev: string[]) => prev.includes(id) ? prev.filter((c: string) => c !== id) : [...prev, id]);
-  };
-  const togglePocket = (id: string) => {
-    setSelectedPockets((prev: string[]) => prev.includes(id) ? prev.filter((p: string) => p !== id) : [...prev, id]);
-  };
-  const toggleAccount = (id: string) => {
-    setSelectedAccounts((prev: string[]) => prev.includes(id) ? prev.filter((a: string) => a !== id) : [...prev, id]);
-  };
+  const hasActiveFilters = !!(search || dateFrom || dateTo || selectedCategories.length > 0 || selectedPockets.length > 0 || selectedAccounts.length > 0 || typeFilter !== 'all');
+
+  const toggleCategory = (id: string) => setSelectedCategories(p => p.includes(id) ? p.filter(c => c !== id) : [...p, id]);
+  const togglePocket = (id: string) => setSelectedPockets(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
+  const toggleAccount = (id: string) => setSelectedAccounts(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
   const resetFilters = () => {
-    setSearch('');
-    setDateFrom('');
-    setDateTo('');
-    setSelectedCategories([]);
-    setSelectedPockets([]);
-    setSelectedAccounts([]);
-    setTypeFilter('all');
+    setSearch(''); setDateFrom(''); setDateTo(''); setSelectedCategories([]); setSelectedPockets([]); setSelectedAccounts([]); setTypeFilter('all');
   };
 
-  const hasActiveFilters = search || dateFrom || dateTo || selectedCategories.length > 0 || selectedPockets.length > 0 || selectedAccounts.length > 0 || typeFilter !== 'all';
+  const handleExportWAWithAI = async () => {
+    if (filteredTransactions.length === 0) return alert("Tidak ada data terfilter.");
+    setAnalyzingAI(true);
+    
+    // PEMBENAHAN TOTAL: Susun objek JSON murni agar sesuai dengan backend `JSON.parse(mediaData)`
+    const payloadKirim = {
+      instruksi: 
+        "Kamu adalah Expert Financial Advisor untuk aplikasi KantongKu. Buatlah analisis laporan keuangan eksekutif " +
+        "yang mendalam, tajam, dan TERSUSUN RAPI TEGAK LURUS KE BAWAH khusus untuk dibaca di WhatsApp.\n\n" +
+        "ATURAN FORMAT WA:\n" +
+        "• Gunakan tanda bintang (*) untuk menebalkan poin penting.\n" +
+        "• Ringkas total pemasukan, pengeluaran, dan arus kas bersih di baris atas.\n" +
+        "• Analisis secara kritis kategori apa saja yang paling banyak memakan pengeluaran beserta nominal dan persentasenya.\n" +
+        "• Berikan saran perbaikan budget konkret untuk minggu depan.\n" +
+        "• Wajib tutup baris paling akhir laporan dengan kalimat: laporan otomatis aplikasi KantongKu",
+      data_transaksi: filteredTransactions.slice(0, 35).map(t => ({
+        nama: t.title,
+        nominal: t.amount,
+        tipe: t.type === 'incoming' ? 'Masuk' : 'Keluar',
+        kategori: categories.find(c => c.id === t.category)?.name || 'Lain-lain',
+        tanggal: t.date.split('T')[0]
+      }))
+    };
+
+    try {
+      const savedSettings = localStorage.getItem('kantongku_settings');
+      const settings = savedSettings ? JSON.parse(savedSettings) : {};
+      const apiKey = settings.geminiApiKey || '';
+
+      const response = await fetch('/api/parse-media', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey
+        },
+        body: JSON.stringify({
+          mediaData: JSON.stringify(payloadKirim), // Dikirim sebagai string JSON yang valid
+          tipeMedia: 'text/json'
+        })
+      });
+
+      if (!response.ok) throw new Error("Gagal meracik laporan via AI");
+      const result = await response.json();
+      
+      const hasilTeksLaporan = result.analisis_laporan_wa || "Laporan tidak tersedia dari asisten AI.";
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(hasilTeksLaporan)}`, '_blank');
+    } catch (err) {
+      console.error(err);
+      // Fallback cadangan instan lokal terstruktur jika koneksi bermasalah
+      const backupText = 
+        `*LAPORAN FINANSIAL KANTONGKU*\n` +
+        `-------------------------------------\n` +
+        `• *Total Masuk* : Rp ${totalIncoming.toLocaleString('id-ID')}\n` +
+        `• *Total Keluar* : Rp ${totalOutgoing.toLocaleString('id-ID')}\n` +
+        `• *Arus Kas Bersih* : Rp ${(totalIncoming - totalOutgoing).toLocaleString('id-ID')}\n\n` +
+        `laporan otomatis aplikasi KantongKu`;
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(backupText)}`, '_blank');
+    } finally {
+      setAnalyzingAI(false);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-4 select-none font-body-md w-full h-full">
-      {/* Header with back button */}
+    <div className="flex flex-col gap-4 w-full h-full text-left max-h-[calc(100vh-120px)] overflow-y-auto pb-12 no-scrollbar">
+      {/* Header */}
       <div className="flex items-center gap-4 border-b border-white/5 pb-4">
-        <button
-          onClick={onBack}
-          className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-white transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Receipt className="w-6 h-6 text-primary" />
-            Riwayat Transaksi
-          </h1>
-          <p className="text-sm text-on-surface-variant mt-1">
-            {filteredTransactions.length} transaksi ditemukan
-          </p>
-        </div>
+        <button onClick={onBack} className="p-2 bg-white/5 rounded-lg"><ChevronLeft className="w-5 h-5"/></button>
+        <h1 className="text-xl font-bold">Riwayat Transaksi</h1>
       </div>
 
-      {/* Search + Filter Controls */}
-      <div className="flex flex-col gap-3">
-        {/* Search bar */}
+      {/* Filter UI */}
+      <div className="flex flex-col gap-2">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant/50" />
-          <input
-            type="text"
-            placeholder="Cari nama transaksi, catatan..."
-            value={search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            className="w-full h-11 bg-surface-variant/20 border border-white/10 rounded-xl pl-9 pr-4 text-sm text-white focus:outline-none focus:border-primary/50 placeholder:text-on-surface-variant/40"
-          />
-        </div>
-
-        {/* Filter toggle row */}
-        <div className="flex gap-2 items-center overflow-x-auto pb-2 md:pb-0">
-          <button
-            onClick={() => setShowFilters((f: boolean) => !f)}
-            className={`flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-label-caps border transition-all shrink-0 ${showFilters ? 'bg-primary/15 border-primary/30 text-primary' : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white'}`}
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            Filter
-            <ChevronDown className={`w-3 h-3 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Type filter pills */}
-          {(['all', 'incoming', 'outgoing'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={`h-9 px-3 rounded-lg text-xs font-label-caps border transition-all shrink-0 ${
-                typeFilter === t
-                  ? t === 'incoming' ? 'bg-primary/15 border-primary/30 text-primary'
-                    : t === 'outgoing' ? 'bg-rose-500/15 border-rose-500/30 text-rose-400'
-                    : 'bg-white/10 border-white/20 text-white'
-                  : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white'
-              }`}
-            >
-              {t === 'all' ? 'Semua' : t === 'incoming' ? '+ Masuk' : '- Keluar'}
-            </button>
-          ))}
-
+          <input type="text" placeholder="Cari deskripsi..." value={search} onChange={e => setSearch(e.target.value)} className="w-full h-11 bg-white/5 border border-white/10 rounded-xl px-4 text-sm focus:outline-none" />
           {hasActiveFilters && (
-            <button
-              onClick={resetFilters}
-              className="ml-auto flex items-center gap-1 h-9 px-3 rounded-lg text-xs font-label-caps bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20 transition-all shrink-0"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Reset
-            </button>
+            <button onClick={resetFilters} className="absolute right-3 top-3.5 text-rose-400 text-xs flex items-center gap-1"><RotateCcw className="w-3 h-3"/> Reset</button>
           )}
         </div>
+        
+        <button onClick={() => setShowFilters(!showFilters)} className="flex items-center justify-between px-4 h-11 bg-white/5 rounded-xl text-xs border border-white/5">
+          <span className="flex items-center gap-2"><SlidersHorizontal className="w-3.5 h-3.5 text-primary"/> Opsi Penyaringan Tingkat Lanjut</span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${showFilters ? 'rotate-180' : ''}`}/>
+        </button>
 
-        {/* Expanded filter panel */}
         {showFilters && (
-          <div className="flex flex-col gap-3 p-4 bg-surface-variant/10 border border-white/5 rounded-xl">
-            {/* Date range */}
+          <div className="bg-white/5 p-4 rounded-xl flex flex-col gap-4 border border-white/5 animate-fade-in">
             <div className="flex gap-2">
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[9px] font-label-caps text-on-surface-variant uppercase flex items-center gap-1">
-                  <Calendar className="w-3 h-3" /> Dari Tanggal
-                </label>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDateFrom(e.target.value)}
-                  className="h-9 bg-[#0B111E]/60 border border-white/10 rounded-lg text-xs text-white px-2 focus:outline-none focus:border-primary/50"
-                />
-              </div>
-              <div className="flex-1 flex flex-col gap-1">
-                <label className="text-[9px] font-label-caps text-on-surface-variant uppercase flex items-center gap-1">
-                  <Calendar className="w-3 h-3" /> Sampai Tanggal
-                </label>
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDateTo(e.target.value)}
-                  className="h-9 bg-[#0B111E]/60 border border-white/10 rounded-lg text-xs text-white px-2 focus:outline-none focus:border-primary/50"
-                />
-              </div>
+              <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} className="w-full h-9 bg-black/20 rounded px-2 text-xs text-white border border-white/10" />
+              <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} className="w-full h-9 bg-black/20 rounded px-2 text-xs text-white border border-white/10" />
+            </div>
+            
+            <div className="flex gap-2 items-center my-1">
+              {(['all', 'incoming', 'outgoing'] as const).map(t => (
+                <button key={t} type="button" onClick={() => setTypeFilter(t)} className={`h-8 px-3 rounded-lg text-xs border transition-all ${typeFilter === t ? 'bg-primary text-black font-bold border-primary' : 'bg-white/5 border-white/10 text-white/70'}`}>
+                  {t === 'all' ? 'Semua Kas' : t === 'incoming' ? 'Masuk' : 'Keluar'}
+                </button>
+              ))}
             </div>
 
-            {/* Category filter */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-label-caps text-on-surface-variant uppercase flex items-center gap-1">
-                <Tag className="w-3 h-3" /> Kategori
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {categories.map(cat => {
-                  const hex = getCategoryColorHex(cat.color);
-                  const active = selectedCategories.includes(cat.id);
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => toggleCategory(cat.id)}
-                      className={`flex items-center gap-1 h-8 px-2.5 rounded-full text-[10px] font-semibold border transition-all ${active ? '' : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white'}`}
-                      style={active ? { backgroundColor: hex + '25', borderColor: hex + '60', color: hex } : {}}
-                    >
-                      <CategoryIcon name={cat.icon} className="w-3 h-3" />
-                      {cat.name}
-                    </button>
-                  );
-                })}
+            <div>
+              <p className="text-[10px] text-white/50 uppercase tracking-wider mb-2">Pilih Kategori</p>
+              <div className="flex flex-wrap gap-1">
+                {categories.map(c => (
+                  <button key={c.id} type="button" onClick={()=>toggleCategory(c.id)} className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${selectedCategories.includes(c.id) ? 'bg-primary border-primary text-black font-bold' : 'bg-white/5 border-white/10 text-white/70'}`}>{c.name}</button>
+                ))}
               </div>
             </div>
-
-            {/* Pocket filter */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[9px] font-label-caps text-on-surface-variant uppercase flex items-center gap-1">
-                <Wallet className="w-3 h-3" /> Kantong
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                {pockets.map(p => {
-                  const active = selectedPockets.includes(p.id);
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => togglePocket(p.id)}
-                      className={`h-8 px-2.5 rounded-full text-[10px] font-semibold border transition-all ${active ? 'bg-primary/20 border-primary/40 text-primary' : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white'}`}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
+            <div>
+              <p className="text-[10px] text-white/50 uppercase tracking-wider mb-2">Pilih Kantong</p>
+              <div className="flex flex-wrap gap-1">
+                {pockets.map(p => (
+                  <button key={p.id} type="button" onClick={()=>togglePocket(p.id)} className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${selectedPockets.includes(p.id) ? 'bg-primary border-primary text-black font-bold' : 'bg-white/5 border-white/10 text-white/70'}`}>{p.name}</button>
+                ))}
               </div>
             </div>
-
-            {/* Account filter */}
-            {accounts.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[9px] font-label-caps text-on-surface-variant uppercase flex items-center gap-1">
-                  <Wallet className="w-3 h-3" /> Wallet/Rekening
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {accounts.map(a => {
-                    const active = selectedAccounts.includes(a.id);
-                    return (
-                      <button
-                        key={a.id}
-                        onClick={() => toggleAccount(a.id)}
-                        className={`h-8 px-2.5 rounded-full text-[10px] font-semibold border transition-all ${active ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400' : 'bg-white/5 border-white/10 text-on-surface-variant hover:text-white'}`}
-                      >
-                        {a.name}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div>
+              <p className="text-[10px] text-white/50 uppercase tracking-wider mb-2">Pilih Wallet / Rekening</p>
+              <div className="flex flex-wrap gap-1">
+                {accounts.map(a => (
+                  <button key={a.id} type="button" onClick={()=>toggleAccount(a.id)} className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${selectedAccounts.includes(a.id) ? 'bg-primary border-primary text-black font-bold' : 'bg-white/5 border-white/10 text-white/70'}`}>{a.name}</button>
+                ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Summary pills */}
-        {filteredTransactions.length > 0 && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex items-center justify-center gap-1.5 py-2 bg-primary/5 border border-primary/15 rounded-lg">
-              <ArrowDownLeft className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-xs font-mono-data text-primary font-bold">+{formatRupiah(totalIncoming)}</span>
-            </div>
-            <div className="flex items-center justify-center gap-1.5 py-2 bg-rose-500/5 border border-rose-500/15 rounded-lg">
-              <ArrowUpRight className="w-4 h-4 text-rose-400 shrink-0" />
-              <span className="text-xs font-mono-data text-rose-400 font-bold">-{formatRupiah(totalOutgoing)}</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Transaction List */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-2 min-h-0">
+      <button onClick={handleExportWAWithAI} className="w-full h-12 bg-primary text-black font-bold text-xs font-label-caps uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99]">
+         {analyzingAI ? <Loader className="animate-spin w-4 h-4"/> : <Send className="w-4 h-4"/>} Kirim Analisis Laporan Cerdas AI ke WA
+      </button>
+
+      {/* List Rendering Transaksi */}
+      <div className="flex flex-col gap-2 mt-2">
         {filteredTransactions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-            <div className="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-              <Receipt className="w-7 h-7 text-on-surface-variant/30" />
-            </div>
-            <p className="text-sm text-on-surface-variant/50">Tidak ada transaksi yang cocok</p>
-            {hasActiveFilters && (
-              <button onClick={resetFilters} className="text-xs text-primary hover:underline">Reset filter</button>
-            )}
-          </div>
+          <div className="text-center py-10 text-white/30 text-xs">Tidak ada data mutasi yang cocok dengan filter.</div>
         ) : (
           filteredTransactions.map(t => {
             const isExpense = t.type === 'outgoing';
-            const sign = isExpense ? '-' : '+';
-            const colorClass = isExpense ? 'text-rose-400' : 'text-primary';
-            const pocket = pockets.find(p => p.id === t.pocketId);
             const cat = categories.find(c => c.id === t.category);
-            const colorHex = getCategoryColorClasses(t.category);
-
+            const colorHex = getCategoryHexColor(t.category);
             return (
-              <div
-                key={t.id}
-                className="flex items-center gap-3 p-3 glass-card rounded-xl hover:bg-white/5 transition-all group cursor-pointer"
-                onClick={() => onEditTransactionSelect(t)}
-              >
-                {/* Icon */}
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: colorHex + '20', border: `1px solid ${colorHex}40` }}
-                >
-                  {cat ? (
-                    <CategoryIcon name={cat.icon} className="w-5 h-5" style={{ color: colorHex }} />
-                  ) : (
-                    <Receipt className="w-5 h-5 text-slate-400" />
-                  )}
+              <div key={t.id} onClick={() => onEditTransactionSelect(t)} className="flex items-center p-3 gap-3 hover:bg-white/5 rounded-xl border border-white/5 glass-card cursor-pointer transition-all">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs shrink-0" style={{ backgroundColor: colorHex + '15', border: `1px solid ${colorHex}30` }}>
+                  <CategoryIcon name={cat?.icon || 'receipt'} className="w-4 h-4" style={{ color: colorHex }} />
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{t.title}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    {cat && (
-                      <span
-                        className="text-[9px] font-label-caps px-1.5 py-0.5 rounded border"
-                        style={{ color: colorHex, backgroundColor: colorHex + '15', borderColor: colorHex + '40' }}
-                      >
-                        {cat.name}
-                      </span>
-                    )}
-                    {pocket && (
-                      <span className="text-[9px] text-on-surface-variant/60">
-                        {pocket.name}
-                      </span>
-                    )}
-                    <span className="text-[9px] font-mono-data text-on-surface-variant/40">{formatDate(t.date)}</span>
-                  </div>
+                  <p className="text-sm font-medium text-white truncate">{t.title}</p>
+                  <p className="text-[10px] text-white/40 font-mono-data mt-0.5">{formatDate(t.date)}</p>
                 </div>
-
-                {/* Amount + Actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`font-mono-data font-bold text-sm ${colorClass}`}>
-                    {sign}{formatRupiah(t.amount, false)}
-                  </span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onEditTransactionSelect(t); }}
-                      className="p-1 rounded text-on-surface-variant/50 hover:text-primary transition-colors"
-                      title="Edit"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm(`Hapus transaksi "${t.title}"?`)) onDeleteTransaction(t.id);
-                      }}
-                      className="p-1 rounded text-on-surface-variant/50 hover:text-rose-400 transition-colors"
-                      title="Hapus"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+                <span className={`text-sm font-bold font-mono-data shrink-0 ${isExpense ? 'text-rose-400' : 'text-primary'}`}>
+                  {isExpense ? '-' : '+'}{formatRupiah(t.amount, false)}
+                </span>
               </div>
             );
           })

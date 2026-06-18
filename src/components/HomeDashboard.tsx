@@ -8,26 +8,13 @@ import {
   Bell, 
   ArrowUpRight, 
   ArrowDownLeft, 
-  ShieldCheck, 
   Landmark, 
   Store, 
   Plus, 
   Send, 
   Receipt, 
-  BarChart3, 
-  Info, 
-  TrendingUp, 
   AlertTriangle,
   Wallet,
-  User,
-  Lock,
-  Coffee,
-  Dumbbell,
-  Briefcase,
-  Utensils,
-  Users,
-  CircleDollarSign,
-  Trash2,
   Sliders,
   Sparkles,
   Heart,
@@ -42,7 +29,14 @@ import {
   GraduationCap,
   Gift,
   X,
-  TrendingDown
+  TrendingDown,
+  TrendingUp,
+  Trash2,
+  Coffee,
+  Dumbbell,
+  Briefcase,
+  Utensils,
+  Users
 } from 'lucide-react';
 
 interface HomeDashboardProps {
@@ -108,10 +102,8 @@ export default function HomeDashboard({
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    // Filter transactions that occurred in the last 30 days
     const recentTrans = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
     
-    // Calculate net change in the last 30 days
     const recentChange = recentTrans.reduce((sum, t) => {
       const delta = t.type === 'incoming' ? t.amount : -t.amount;
       return sum + delta;
@@ -126,7 +118,6 @@ export default function HomeDashboard({
   };
 
   const trendPercent = getTrendPercentage();
-
   const unreadNotifCount = notifications.filter(n => !n.isRead).length;
 
   const getCategoryIcon = (category: string) => {
@@ -138,71 +129,41 @@ export default function HomeDashboard({
 
   const getPocketIconComponent = (iconName: string) => {
     switch (iconName) {
-      case 'group':
-        return Users;
-      case 'storefront':
-        return Store;
-      case 'coffee':
-        return Coffee;
-      case 'heart':
-        return Heart;
-      case 'sparkles':
-        return Sparkles;
-      case 'piggy':
-        return PiggyBank;
-      case 'creditcard':
-        return CreditCard;
-      case 'coins':
-        return Coins;
-      case 'shopping':
-        return ShoppingBag;
-      case 'home':
-        return HomeIcon;
-      case 'car':
-        return Car;
-      case 'plane':
-        return Plane;
-      case 'game':
-        return Gamepad2;
-      case 'education':
-        return GraduationCap;
-      case 'food':
-        return Utensils;
-      case 'gift':
-        return Gift;
-      case 'briefcase':
-        return Briefcase;
-      default:
-        return Wallet;
+      case 'group': return Users;
+      case 'storefront': return Store;
+      case 'coffee': return Coffee;
+      case 'heart': return Heart;
+      case 'sparkles': return Sparkles;
+      case 'piggy': return PiggyBank;
+      case 'creditcard': return CreditCard;
+      case 'coins': return Coins;
+      case 'shopping': return ShoppingBag;
+      case 'home': return HomeIcon;
+      case 'car': return Car;
+      case 'plane': return Plane;
+      case 'game': return Gamepad2;
+      case 'education': return GraduationCap;
+      case 'food': return Utensils;
+      case 'gift': return Gift;
+      case 'briefcase': return Briefcase;
+      default: return Wallet;
     }
   };
 
   const getPocketColorHexAndTextClass = (colorName: string) => {
     switch (colorName) {
-      case 'indigo':
-        return { hex: '#3B82F6', textClass: 'text-blue-400' };
-      case 'amber':
-        return { hex: '#F59E0B', textClass: 'text-amber-400' };
-      case 'rose':
-        return { hex: '#EF4444', textClass: 'text-rose-400' };
-      case 'purple':
-        return { hex: '#8B5CF6', textClass: 'text-purple-400' };
-      case 'teal':
-        return { hex: '#14B8A6', textClass: 'text-teal-400' };
-      case 'orange':
-        return { hex: '#F97316', textClass: 'text-orange-400' };
-      case 'cyan':
-        return { hex: '#06B6D4', textClass: 'text-cyan-400' };
-      case 'pink':
-        return { hex: '#EC4899', textClass: 'text-pink-400' };
-      case 'yellow':
-        return { hex: '#EAB308', textClass: 'text-yellow-400' };
-      case 'sky':
-        return { hex: '#0EA5E9', textClass: 'text-sky-400' };
-      case 'lime':
-        return { hex: '#84CC16', textClass: 'text-lime-400' };
-      default:
-        return { hex: '#10B981', textClass: 'text-emerald-400' };
+      case 'indigo': return { hex: '#3B82F6', textClass: 'text-blue-400' };
+      case 'amber': return { hex: '#F59E0B', textClass: 'text-amber-400' };
+      case 'rose': return { hex: '#EF4444', textClass: 'text-rose-400' };
+      case 'purple': return { hex: '#8B5CF6', textClass: 'text-purple-400' };
+      case 'teal': return { hex: '#14B8A6', textClass: 'text-teal-400' };
+      case 'orange': return { hex: '#F97316', textClass: 'text-orange-400' };
+      case 'cyan': return { hex: '#06B6D4', textClass: 'text-cyan-400' };
+      case 'pink': return { hex: '#EC4899', textClass: 'text-pink-400' };
+      case 'yellow': return { hex: '#EAB308', textClass: 'text-yellow-400' };
+      case 'sky': return { hex: '#0EA5E9', textClass: 'text-sky-400' };
+      case 'lime': return { hex: '#84CC16', textClass: 'text-lime-400' };
+      default: return { hex: '#10B981', textClass: 'text-emerald-400' };
     }
   };
 
@@ -224,7 +185,7 @@ export default function HomeDashboard({
   return (
     <div className="flex flex-col gap-5 relative select-none">
       
-      {/* HEADER BAR (Verbatim mockups) */}
+      {/* HEADER BAR */}
       <header className="flex justify-between items-center w-full bg-transparent z-40 relative pt-1 pb-1 md:justify-end md:pt-0">
         <div className="flex items-center gap-3 md:hidden">
           <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 flex-shrink-0">
@@ -297,7 +258,6 @@ export default function HomeDashboard({
 
       {/* Dasbor Actions Header Row */}
       <div className="flex justify-end w-full">
-        {/* MANAGE POCKETS BUTTON */}
         <button
           onClick={onOpenPocketManager}
           className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 hover:border-primary/40 hover:bg-white/10 text-xs font-bold font-label-caps text-on-surface-variant hover:text-white rounded-xl transition-all active:scale-95"
@@ -313,127 +273,115 @@ export default function HomeDashboard({
         {/* LEFT COLUMN: Pockets & Quick Actions */}
         <div className="lg:col-span-7 flex flex-col gap-6 w-full min-w-0">
 
-              {/* Hero Section: Total Balance */}
-              <section className="glass-card rounded-xl p-card_padding glow-primary relative overflow-hidden flex flex-col gap-2">
-                <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
-                <p className="font-label-caps text-on-surface-variant uppercase flex items-center gap-[12px]">
-                  <Wallet className="w-5 h-5 text-primary" />
-                  Total Saldo Seluruhnya
-                </p>
-                <h2 className="font-display-lg text-primary tracking-tight glow-text-primary">
-                  {formatRupiah(totalBalance)}
-                </h2>
-                <div className="flex items-center gap-2 mt-1">
-                  {trendPercent > 0 && (
-                    <span className="px-2 py-0.5 bg-primary/10 text-primary rounded font-mono-data text-xs flex items-center gap-1 border border-primary/20">
-                      <TrendingUp className="w-3 h-3" /> +{trendPercent}%
-                    </span>
-                  )}
-                  {trendPercent < 0 && (
-                    <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 rounded font-mono-data text-xs flex items-center gap-1 border border-rose-500/20">
-                      <TrendingDown className="w-3 h-3" /> {trendPercent}%
-                    </span>
-                  )}
-                  {trendPercent === 0 && (
-                    <span className="px-2 py-0.5 bg-white/5 text-on-surface-variant rounded font-mono-data text-xs flex items-center gap-1 border border-white/10">
-                      0.0%
-                    </span>
-                  )}
-                  <span className="text-on-surface-variant text-xs">dari bulan lalu</span>
+          {/* Hero Section: Total Balance */}
+          <section className="glass-card rounded-xl p-card_padding glow-primary relative overflow-hidden flex flex-col gap-2">
+            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+            <p className="font-label-caps text-on-surface-variant uppercase flex items-center gap-[12px]">
+              <Wallet className="w-5 h-5 text-primary" />
+              Total Saldo Seluruhnya
+            </p>
+            <h2 className="font-display-lg text-primary tracking-tight glow-text-primary text-2xl font-bold">
+              {formatRupiah(totalBalance)}
+            </h2>
+            <div className="flex items-center gap-2 mt-1">
+              {trendPercent > 0 && (
+                <span className="px-2 py-0.5 bg-primary/10 text-primary rounded font-mono-data text-xs flex items-center gap-1 border border-primary/20">
+                  <TrendingUp className="w-3 h-3" /> +{trendPercent}%
+                </span>
+              )}
+              {trendPercent < 0 && (
+                <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 rounded font-mono-data text-xs flex items-center gap-1 border border-rose-500/20">
+                  <TrendingDown className="w-3 h-3" /> {trendPercent}%
+                </span>
+              )}
+              {trendPercent === 0 && (
+                <span className="px-2 py-0.5 bg-white/5 text-on-surface-variant rounded font-mono-data text-xs flex items-center gap-1 border border-white/10">
+                  0.0%
+                </span>
+              )}
+              <span className="text-on-surface-variant text-xs">dari bulan lalu</span>
+            </div>
+          </section>
+
+          {/* Sub Pockets Carousel */}
+          <div className="w-full overflow-x-auto pb-2 pt-1 flex gap-3 no-scrollbar scroll-smooth snap-x">
+            {pockets.map(p => {
+              const IconComponent = getPocketIconComponent(p.icon);
+              const { hex: colorHex, textClass: colorTextClass } = getPocketColorHexAndTextClass(p.color);
+              const isSelected = selectedPocketId === p.id;
+              
+              let activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#10B981]';
+              if (p.color === 'indigo') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#3B82F6]';
+              else if (p.color === 'amber') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F59E0B]';
+              else if (p.color === 'rose') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EF4444]';
+              else if (p.color === 'purple') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#8B5CF6]';
+              else if (p.color === 'teal') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#14B8A6]';
+              else if (p.color === 'orange') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F97316]';
+              else if (p.color === 'cyan') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#06B6D4]';
+              else if (p.color === 'pink') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EC4899]';
+              else if (p.color === 'yellow') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EAB308]';
+              else if (p.color === 'sky') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#0EA5E9]';
+              else if (p.color === 'lime') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#84CC16]';
+
+              return (
+                <div 
+                  key={p.id} 
+                  onClick={() => setSelectedPocketId(isSelected ? null : p.id)}
+                  className={`glass-card rounded-xl p-3.5 flex flex-col gap-0.5 border-l-2 shrink-0 w-[155px] sm:w-[175px] relative snap-start hover:bg-white/5 cursor-pointer transition-all duration-200 select-none ${isSelected ? activeRingClass : 'border-white/5'}`}
+                  style={{ borderLeftColor: colorHex }}
+                >
+                  <div className="absolute top-3.5 right-3.5" style={{ color: colorHex + 'd1' }}>
+                    <IconComponent className="w-4 h-4" />
+                  </div>
+                  <p className={`text-[10px] font-bold uppercase tracking-wider truncate pr-6 ${colorTextClass}`}>
+                    {p.name}
+                  </p>
+                  <p className="text-md font-bold text-white font-mono mt-0.5">{formatRupiah(p.balance)}</p>
+                  <span className="text-[9px] text-on-surface-variant/50 italic truncate mt-0.5 block">{p.tag}</span>
                 </div>
-              </section>
+              );
+            })}
+          </div>
 
-              {/* Sub Pockets dynamically rendered as a horizontally scrollable carousel */}
-              <div className="w-full overflow-x-auto pb-2 pt-1 flex gap-3 no-scrollbar scroll-smooth snap-x">
-                {pockets.map(p => {
-                  const IconComponent = getPocketIconComponent(p.icon);
-                  const { hex: colorHex, textClass: colorTextClass } = getPocketColorHexAndTextClass(p.color);
-                  const isSelected = selectedPocketId === p.id;
-                  
-                  // Ring classes for selected states
-                  let activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#10B981]';
-                  if (p.color === 'indigo') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#3B82F6]';
-                  else if (p.color === 'amber') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F59E0B]';
-                  else if (p.color === 'rose') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EF4444]';
-                  else if (p.color === 'purple') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#8B5CF6]';
-                  else if (p.color === 'teal') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#14B8A6]';
-                  else if (p.color === 'orange') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#F97316]';
-                  else if (p.color === 'cyan') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#06B6D4]';
-                  else if (p.color === 'pink') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EC4899]';
-                  else if (p.color === 'yellow') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#EAB308]';
-                  else if (p.color === 'sky') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#0EA5E9]';
-                  else if (p.color === 'lime') activeRingClass = 'ring-2 ring-offset-2 ring-offset-[#0B111E] ring-[#84CC16]';
-
-                  return (
-                    <div 
-                      key={p.id} 
-                      onClick={() => setSelectedPocketId(isSelected ? null : p.id)}
-                      className={`glass-card rounded-xl p-3.5 flex flex-col gap-0.5 border-l-2 shrink-0 w-[155px] sm:w-[175px] relative snap-start hover:bg-white/5 cursor-pointer transition-all duration-200 select-none ${isSelected ? activeRingClass : 'border-white/5'}`}
-                      style={{ borderLeftColor: colorHex }}
-                    >
-                      <div className="absolute top-3.5 right-3.5" style={{ color: colorHex + 'd1' }}>
-                        <IconComponent className="w-4 h-4" />
-                      </div>
-                      <p className={`text-[10px] font-bold uppercase tracking-wider truncate pr-6 ${colorTextClass}`}>
-                        {p.name}
-                      </p>
-                      <p className="text-md font-bold text-white font-mono mt-0.5">{formatRupiah(p.balance)}</p>
-                      <span className="text-[9px] text-on-surface-variant/50 italic truncate mt-0.5 block">{p.tag}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Quick Action Matrix grid */}
-              <section className="py-2">
-                <div className="flex justify-between items-center gap-2">
-                  <button 
-                    onClick={onOpenAddModal}
-                    className="flex flex-col items-center gap-2 group w-full"
-                  >
-                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/20 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
-                      <Plus className="w-6 h-6" />
-                    </div>
-                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Add Dana</span>
-                  </button>
-                  
-                  <button 
-                    onClick={() => setTransferModalOpen(true)}
-                    className="flex flex-col items-center gap-2 group w-full"
-                  >
-                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
-                      <Send className="w-5 h-5" />
-                    </div>
-                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Transfer</span>
-                  </button>
-
-                  <button 
-                    onClick={onOpenBudgetModal}
-                    className="flex flex-col items-center gap-2 group w-full"
-                  >
-                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
-                      <Receipt className="w-5 h-5" />
-                    </div>
-                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Jatah Jajan</span>
-                  </button>
-
-                  <button 
-                    onClick={() => onChangeTab('activity')}
-                    className="flex flex-col items-center gap-2 group w-full"
-                  >
-                    <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-[#3B82F6] group-hover:bg-[#3B82F6]/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(59,130,246,0.05)]">
-                      <BarChart3 className="w-5 h-5" />
-                    </div>
-                    <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Laporan WA</span>
-                  </button>
+          {/* Quick Action Matrix Grid - REVISI: LAPORAN WA DIHAPUS (SEKARANG 3 KOLOM) */}
+          <section className="py-2">
+            <div className="grid grid-cols-3 gap-2 w-full">
+              <button 
+                onClick={onOpenAddModal}
+                className="flex flex-col items-center gap-2 group w-full"
+              >
+                <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/20 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                  <Plus className="w-6 h-6" />
                 </div>
-              </section>
+                <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Add Dana</span>
+              </button>
+              
+              <button 
+                onClick={() => setTransferModalOpen(true)}
+                className="flex flex-col items-center gap-2 group w-full"
+              >
+                <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                  <Send className="w-5 h-5" />
+                </div>
+                <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Transfer</span>
+              </button>
+
+              <button 
+                onClick={onOpenBudgetModal}
+                className="flex flex-col items-center gap-2 group w-full"
+              >
+                <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Target & Limit</span>
+              </button>
+            </div>
+          </section>
 
         </div>
 
         {/* RIGHT COLUMN: Recent Transactions */}
         <div className="lg:col-span-5 flex flex-col gap-6 w-full min-w-0">
-          {/* RECENT TRANSACTIONS SECTIONS */}
           <section className="flex flex-col gap-3">
             <div className="flex justify-between items-center border-b border-white/5 pb-2">
               <div className="flex items-center gap-2 max-w-[70%]">
@@ -482,7 +430,6 @@ export default function HomeDashboard({
                   const isExpense = t.type === 'outgoing';
                   const pocket = pockets.find(p => p.id === t.pocketId);
                   const pocketLabel = pocket ? pocket.name : 'Kantong Lainnya';
-
                   const catColorClass = isExpense ? 'text-[#EF4444]' : 'text-primary';
 
                   return (
@@ -490,7 +437,7 @@ export default function HomeDashboard({
                       key={t.id}
                       id={`transaksi-${t.id}`}
                       onClick={() => onEditTransactionSelect(t)}
-                      className="glass-card rounded-xl p-3 flex justify-between items-center hover:bg-white/5 transition-all group relative cursor-pointer"
+                      className="glass-card rounded-xl p-3 flex justify-between items-center hover:bg-white/5 transition-all group relative cursor-pointer border border-white/5"
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-on-surface-variant group-hover:scale-105 transition-transform shrink-0">

@@ -10,6 +10,7 @@ export interface AppSettings {
   currency: 'IDR' | 'USD';
   theme: 'dark' | 'light';
   alarmRem: boolean;
+  geminiApiKey?: string;
 }
 
 interface ProfileViewProps {
@@ -271,6 +272,30 @@ export default function ProfileView({
       </section>
 
 
+
+      {/* AI Settings */}
+      <section className="flex flex-col gap-2.5 mt-2">
+        <span className="text-xs font-label-caps text-on-surface-variant uppercase tracking-wider block">Konfigurasi AI</span>
+        
+        <div className="glass-card rounded-xl p-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-[9px] font-label-caps text-on-surface-variant uppercase">Gemini API Key</label>
+            <div className="relative">
+              <input
+                type={showNew ? 'text' : 'password'}
+                value={settings.geminiApiKey || ''}
+                onChange={(e) => updateSetting('geminiApiKey', e.target.value)}
+                className="w-full h-9 bg-[#0B111E]/40 rounded-lg text-xs text-white border border-white/10 focus:outline-none focus:border-primary/60 px-3 pr-9"
+                placeholder="Masukkan API Key Gemini Anda"
+              />
+              <button type="button" onClick={() => setShowNew(v => !v)} className="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant/50 hover:text-white">
+                {showNew ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <p className="text-[10px] text-on-surface-variant/70 mt-1">Kosongkan untuk menggunakan kunci bawaan server. Masukkan kunci Anda sendiri jika AI tidak merespons.</p>
+          </div>
+        </div>
+      </section>
 
       {/* Dangerous Actions */}
       <section className="flex flex-col gap-2.5 mt-2">
