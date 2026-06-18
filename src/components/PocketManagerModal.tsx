@@ -301,7 +301,7 @@ export default function PocketManagerModal({
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
-                        {pockets.length > 1 && (
+                        {pockets.length > 1 && p.id !== 'pribadi' && (
                           <button
                             type="button"
                             onClick={() => handleDeleteCheck(p.id, p.name)}
@@ -361,14 +361,21 @@ export default function PocketManagerModal({
               {formMode === 'add' && (
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-label-caps text-on-surface-variant uppercase">Saldo Awal (Rp)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={initialBalance || ''}
-                    onChange={(e) => setInitialBalance(Number(e.target.value))}
-                    className="h-11 bg-surface-variant/40 border border-white/10 rounded-lg px-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
-                  />
+                  <div className="relative flex items-center">
+                    <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      placeholder="0"
+                      value={initialBalance ? formatRupiah(initialBalance, false) : ''}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^0-9]/g, '');
+                        setInitialBalance(Number(raw) || 0);
+                      }}
+                      className="h-11 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
+                    />
+                  </div>
                 </div>
               )}
 

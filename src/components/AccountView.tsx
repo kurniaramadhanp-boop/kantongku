@@ -88,10 +88,34 @@ export default function AccountView({
   };
 
   const handleAllocationInputChange = (pocketId: string, val: number) => {
-    setAllocationInputs(prev => ({
-      ...prev,
-      [pocketId]: Math.max(0, val)
-    }));
+    if (!selectedAccountId) return;
+    const targetAcc = accounts.find(a => a.id === selectedAccountId);
+    if (!targetAcc) return;
+
+    // Calculate sum of other pocket allocations (excluding pocketId and 'pribadi')
+    const otherPocketsAllocSum = pockets
+      .filter(p => p.id !== 'pribadi' && p.id !== pocketId)
+      .reduce((sum, p) => sum + (allocationInputs[p.id] || 0), 0) + val;
+
+    if (otherPocketsAllocSum > targetAcc.balance) {
+      // Exceeds balance, cap the input value
+      const maxVal = targetAcc.balance - pockets
+        .filter(p => p.id !== 'pribadi' && p.id !== pocketId)
+        .reduce((sum, p) => sum + (allocationInputs[p.id] || 0), 0);
+      
+      const cappedVal = Math.max(0, maxVal);
+      setAllocationInputs(prev => {
+        const next = { ...prev, [pocketId]: cappedVal };
+        next['pribadi'] = 0;
+        return next;
+      });
+    } else {
+      setAllocationInputs(prev => {
+        const next = { ...prev, [pocketId]: val };
+        next['pribadi'] = targetAcc.balance - otherPocketsAllocSum;
+        return next;
+      });
+    }
   };
 
   const totalAllocatedInput = Object.values(allocationInputs).reduce((sum, v) => sum + v, 0);
@@ -380,19 +404,26 @@ export default function AccountView({
                     <div className="flex flex-col gap-3 max-h-[40vh] overflow-y-auto pr-1 no-scrollbar">
                       {pockets.map(p => {
                         const val = allocationInputs[p.id] || 0;
+                        const isPribadi = p.id === 'pribadi';
                         return (
                           <div key={p.id} className="flex flex-col gap-1.5">
-                            <label className="text-[11px] text-white/80 font-medium">{p.name}</label>
+                            <label className="text-[11px] text-white/80 font-medium">
+                              {p.name} {isPribadi && <span className="text-[10px] text-on-surface-variant">(Terhitung Otomatis)</span>}
+                            </label>
                             <div className="relative flex items-center">
                               <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
                               <input 
-                                type="number"
-                                min="0"
-                                max={selectedAccount.balance}
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                disabled={isPribadi}
                                 placeholder="0"
-                                value={val || ''}
-                                onChange={(e) => handleAllocationInputChange(p.id, Number(e.target.value))}
-                                className="h-10 w-full bg-[#0B111E]/40 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white focus:outline-none focus:border-primary/60 font-mono-data"
+                                value={val ? formatRupiah(val, false) : ''}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9]/g, '');
+                                  handleAllocationInputChange(p.id, Number(raw) || 0);
+                                }}
+                                className={`h-10 w-full bg-[#0B111E]/40 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white focus:outline-none focus:border-primary/60 font-mono-data ${isPribadi ? 'opacity-60 cursor-not-allowed bg-slate-800/20' : ''}`}
                               />
                             </div>
                           </div>
@@ -556,14 +587,21 @@ export default function AccountView({
             {formMode === 'add' && (
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-label-caps text-on-surface-variant uppercase">Saldo Awal Wallet (Rp)</label>
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={initialBalance || ''}
-                  onChange={(e) => setInitialBalance(Number(e.target.value))}
-                  className="h-11 bg-surface-variant/40 border border-white/10 rounded-lg px-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
-                />
+                <div className="relative flex items-center">
+                  <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="0"
+                    value={initialBalance ? formatRupiah(initialBalance, false) : ''}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      setInitialBalance(Number(raw) || 0);
+                    }}
+                    className="h-11 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
+                  />
+                </div>
               </div>
             )}
 

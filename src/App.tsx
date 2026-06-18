@@ -558,6 +558,10 @@ export default function App() {
   };
 
   const handleDeletePocket = (id: string) => {
+    if (id === 'pribadi') {
+      alert("Kantong Pribadi tidak dapat dihapus!");
+      return;
+    }
     // 1. Find all transactions associated with this pocket
     const targetTrans = transactions.filter(t => t.pocketId === id);
     const targetTransIds = new Set(targetTrans.map(t => t.id));
@@ -657,7 +661,7 @@ export default function App() {
     // Generating an incoming transaction if initial balance > 0
     let nextTransactions = transactions;
     if (newAccData.initialBalance > 0) {
-      const defaultPocketId = pockets[0]?.id || 'pribadi';
+      const defaultPocketId = pockets.find(p => p.id === 'pribadi')?.id || pockets[0]?.id || 'pribadi';
       const initialTrans: Transaction = {
         id: `t-accinit-${Date.now()}`,
         title: `Saldo Awal ${newAccData.name}`,
