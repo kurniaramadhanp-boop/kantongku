@@ -64,3 +64,16 @@ export interface UserProfile {
   avatarUrl: string;
   joinedAt: string;
 }
+
+export interface Reminder {
+  id: string;
+  title: string;
+  time: string; // Format: "HH:MM"
+  repeatType: 'once' | 'every_day' | 'every_week' | 'every_month';
+  isActive: boolean;
+  createdAt: string; // ISO date string
+  dayOfWeek: number; // 0-6 (Sunday to Saturday)
+  dayOfMonth: number; // 1-31 (day of month)
+  lastTriggeredDate?: string; // Format: "YYYY-MM-DD"
+}
+

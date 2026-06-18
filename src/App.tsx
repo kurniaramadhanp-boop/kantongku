@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Pocket, Transaction, Budget, Notification, UserProfile, PocketType, Account, Category } from './types';
+import { Pocket, Transaction, Budget, Notification, UserProfile, PocketType, Account, Category, Reminder } from './types';
 import {
   INITIAL_POCKETS,
   INITIAL_TRANSACTIONS,
@@ -24,6 +24,7 @@ import PocketManagerModal from './components/PocketManagerModal';
 import CategoryManagerModal from './components/CategoryManagerModal';
 import TransactionHistoryView from './components/TransactionHistoryView';
 import TransactionHistoryPage from './components/TransactionHistoryPage';
+import ReminderModal from './components/ReminderModal';
 
 // Icons for navigation
 import { Home, Wallet, PlusCircle, LineChart, User, Receipt } from 'lucide-react';
@@ -63,6 +64,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>(INITIAL_NOTIFICATIONS);
   const [accounts, setAccounts] = useState<Account[]>(INITIAL_ACCOUNTS);
   const [categories, setCategories] = useState<Category[]>(CATEGORIES);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   
   const [activeTab, setActiveTab] = useState<string>('home');
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -70,6 +72,7 @@ export default function App() {
   const [isPocketManagerOpen, setIsPocketManagerOpen] = useState<boolean>(false);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState<boolean>(false);
   const [isCategoryManagerOpen, setIsCategoryManagerOpen] = useState<boolean>(false);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState<boolean>(false);
   const [historyInitialFilter, setHistoryInitialFilter] = useState<{ category?: string } | undefined>(undefined);
 
   const DEFAULT_SETTINGS: AppSettings = { currency: 'IDR', theme: 'dark', alarmRem: true };
@@ -97,6 +100,7 @@ export default function App() {
 
     if (stored.budgets) setBudgets(JSON.parse(stored.budgets));
     if (stored.notifications) setNotifications(JSON.parse(stored.notifications));
+    if (stored.reminders) setReminders(JSON.parse(stored.reminders));
 
     // Load app settings
     const savedSettings = localStorage.getItem('kantongku_settings');
@@ -122,6 +126,36 @@ export default function App() {
         }
         setCurrentUser(profile);
         localStorage.setItem('kantongku_user', JSON.stringify(profile));
+
+        const userStored = readStoredState(firebaseUser.email);
+        if (userStored.pockets) {
+          const loadedPockets = JSON.parse(userStored.pockets);
+          const loadedTransactions = userStored.transactions ? JSON.parse(userStored.transactions) : INITIAL_TRANSACTIONS;
+          const loadedAccounts = userStored.accounts ? JSON.parse(userStored.accounts) : INITIAL_ACCOUNTS;
+          const loadedCategories = userStored.categories ? JSON.parse(userStored.categories) : CATEGORIES;
+          const { updatedPockets, updatedAccounts } = recalculateBalances(loadedTransactions, loadedPockets, loadedAccounts);
+
+          setPockets(updatedPockets);
+          setTransactions(loadedTransactions);
+          setAccounts(updatedAccounts);
+          setCategories(loadedCategories);
+          if (userStored.budgets) setBudgets(JSON.parse(userStored.budgets));
+          if (userStored.notifications) setNotifications(JSON.parse(userStored.notifications));
+          if (userStored.reminders) {
+            setReminders(JSON.parse(userStored.reminders));
+          } else {
+            setReminders([]);
+          }
+        } else {
+          setPockets(INITIAL_POCKETS);
+          setTransactions(INITIAL_TRANSACTIONS);
+          setAccounts(INITIAL_ACCOUNTS);
+          setCategories(CATEGORIES);
+          setBudgets(INITIAL_BUDGETS);
+          setNotifications(INITIAL_NOTIFICATIONS);
+          setReminders([]);
+        }
+
         setActiveTab('home');
       } else {
         // User is logged out
@@ -329,6 +363,13 @@ export default function App() {
       setCategories(loadedCategories);
       if (stored.budgets) setBudgets(JSON.parse(stored.budgets));
       if (stored.notifications) setNotifications(JSON.parse(stored.notifications));
+      if (stored.reminders) {
+        setReminders(JSON.parse(stored.reminders));
+      } else {
+        setReminders([]);
+      }
+    } else {
+      setReminders([]);
     }
 
     setCurrentUser(profile);
@@ -357,7 +398,10 @@ export default function App() {
     setNotifications(INITIAL_NOTIFICATIONS);
     setAccounts(updatedAccounts);
     setCategories(CATEGORIES);
+    setReminders([]);
     saveStateToStorage(updatedPockets, INITIAL_TRANSACTIONS, INITIAL_BUDGETS, INITIAL_NOTIFICATIONS, updatedAccounts, CATEGORIES);
+    const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');
+    localStorage.removeItem(`${storagePrefix}reminders`);
     alert('Asisten KantongKu berhasil dikembalikan ke data mockup awal.');
   };
 
@@ -397,20 +441,105 @@ export default function App() {
     // Fire dynamic alarm notifications
     let nextNotifications = [...notifications];
     
+    // Helper function for dynamic time formatting
+    const dapatkanWaktuSekarangString = (): string => {
+      const sekarang = new Date();
+      const opsiTanggal: Intl.DateTimeFormatOptions = { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      };
+      const tanggalFormat = sekarang.toLocaleDateString('id-ID', opsiTanggal);
+      const jamFormat = sekarang.toLocaleTimeString('id-ID', { 
+        hour: '2-digit', minute: '2-digit', hour12: false 
+      }).replace(':', '.');
+
+      return `${tanggalFormat} - Pukul ${jamFormat}`;
+    };
+
+    const waktuSekarang = dapatkanWaktuSekarangString();
+    
+    // Automatic success notification for transaction creation
+    const typeLabel = newTransaction.type === 'incoming' ? 'Pemasukan' : 'Pengeluaran';
+    const amountFormatted = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(newTransaction.amount);
+    
+    const successNotif: Notification = {
+      id: `n-success-${Date.now()}`,
+      title: 'Pencatatan Berhasil',
+      message: `Pencatatan berhasil: ${typeLabel} '${newTransaction.title}' sebesar ${amountFormatted} telah disimpan.`,
+      time: waktuSekarang,
+      isRead: false,
+      type: 'success'
+    };
+    nextNotifications = [successNotif, ...nextNotifications];
+
     // Check if target limits have been surpassed or reached warning zone
     const targetBudgetObj = nextBudgets.find(b => b.category === newTransaction.category);
-    if (targetBudgetObj && targetBudgetObj.type === 'expense_limit') {
-      const remainingRatio = (targetBudgetObj.limit - targetBudgetObj.spent) / targetBudgetObj.limit;
-      if (remainingRatio <= 0.20 && remainingRatio > 0) {
-        const alertNotif: Notification = {
-          id: `n-${Date.now()}`,
-          title: 'Rem Finansial',
-          message: `Opps! Sisa anggaran jatah jajan "${targetBudgetObj.title}" sisa ${Math.round(remainingRatio * 100)}%. Batasi pembelian agar tetap aman!`,
-          time: 'Baru Saja',
-          isRead: false,
-          type: 'warning'
-        };
-        nextNotifications = [alertNotif, ...nextNotifications];
+
+    if (targetBudgetObj) {
+      // 1. HITUNG PERSENTASE SEBELUM TRANSAKSI BARU MASUK
+      const oldSpent = targetBudgetObj.spent - newTransaction.amount;
+      const oldProgressPercent = Math.round((oldSpent / targetBudgetObj.limit) * 100);
+      
+      // 2. HITUNG PERSENTASE SETELAH TRANSAKSI BARU MASUK
+      const progressPercent = Math.round((targetBudgetObj.spent / targetBudgetObj.limit) * 100);
+
+      // ==========================================
+      // JALUR A: EXPENSE LIMIT (Sisa Anggaran Turun)
+      // ==========================================
+      if (targetBudgetObj.type === 'expense_limit' && newTransaction.type === 'outgoing') {
+        // Warning 80%
+        if (oldProgressPercent < 80 && progressPercent >= 80 && progressPercent < 100) {
+          const warningNotif: Notification = {
+            id: `n-warn-80-${Date.now()}`,
+            title: 'Peringatan Anggaran',
+            message: `⚠️ Peringatan: Total pengeluaran kategori "${targetBudgetObj.title}" telah melebihi 80% dari batas bulanan (${progressPercent}% terpakai).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [warningNotif, ...nextNotifications];
+        }
+        
+        // Warning 100%
+        if (oldProgressPercent < 100 && progressPercent >= 100) {
+          const criticalNotif: Notification = {
+            id: `n-warn-100-${Date.now()}`,
+            title: 'Batas Anggaran Tercapai',
+            message: `🚨 Peringatan Kritis: Total pengeluaran kategori "${targetBudgetObj.title}" telah mencapai atau melebihi 100% dari batas bulanan (${progressPercent}% terpakai).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [criticalNotif, ...nextNotifications];
+        }
+      }
+
+      // ==========================================
+      // JALUR B: TARGET FUNDING (Tabungan Naik)
+      // ==========================================
+      else if (targetBudgetObj.type === 'target_funding') {
+        const savingMilestones = [25, 50, 70, 85, 100];
+        
+        // Cari milestone yang baru saja dilompati ke atas oleh tabungan ini
+        const triggeredMilestone = savingMilestones.find(m => oldProgressPercent < m && progressPercent >= m);
+
+        if (triggeredMilestone !== undefined) {
+          let msg = `Mantap! Tabungan "${targetBudgetObj.title}" Anda sudah mencapai progress ${progressPercent}%. Terus konsisten!`;
+
+          if (progressPercent >= 100) {
+            msg = `🎉 Selamat! Target Tabungan "${targetBudgetObj.title}" Anda telah tercapai 100%. Luar biasa!`;
+          }
+
+          const alertNotif: Notification = {
+            id: `n-sav-${Date.now()}-${triggeredMilestone}`,
+            title: 'Target Celengan',
+            message: msg,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'info'
+          };
+
+          nextNotifications = [alertNotif, ...nextNotifications];
+        }
       }
     }
 
@@ -844,6 +973,117 @@ export default function App() {
     }
   };
 
+  // CRUD Handlers for Reminders (Pengingat)
+  const handleAddReminder = (newRemData: Omit<Reminder, 'id' | 'createdAt' | 'dayOfWeek' | 'dayOfMonth' | 'isActive'>) => {
+    const now = new Date();
+    const newReminder: Reminder = {
+      ...newRemData,
+      id: `rem-${Date.now()}`,
+      isActive: true,
+      createdAt: now.toISOString(),
+      dayOfWeek: now.getDay(),
+      dayOfMonth: now.getDate()
+    };
+    const nextReminders = [...reminders, newReminder];
+    setReminders(nextReminders);
+    const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');
+    localStorage.setItem(`${storagePrefix}reminders`, JSON.stringify(nextReminders));
+  };
+
+  const handleToggleReminder = (id: string) => {
+    const nextReminders = reminders.map(r => r.id === id ? { ...r, isActive: !r.isActive } : r);
+    setReminders(nextReminders);
+    const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');
+    localStorage.setItem(`${storagePrefix}reminders`, JSON.stringify(nextReminders));
+  };
+
+  const handleDeleteReminder = (id: string) => {
+    const nextReminders = reminders.filter(r => r.id !== id);
+    setReminders(nextReminders);
+    const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');
+    localStorage.setItem(`${storagePrefix}reminders`, JSON.stringify(nextReminders));
+  };
+
+  // Background check effect for active alarm reminders
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkAlarms = () => {
+      const now = new Date();
+      const currentDateStr = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
+      const currentHour = String(now.getHours()).padStart(2, '0');
+      const currentMinute = String(now.getMinutes()).padStart(2, '0');
+      const currentTimeStr = `${currentHour}:${currentMinute}`;
+      const currentDayOfWeek = now.getDay();
+      const currentDayOfMonth = now.getDate();
+
+      let hasUpdates = false;
+      let updatedReminders = [...reminders];
+      let newNotifs: Notification[] = [];
+
+      updatedReminders = updatedReminders.map(r => {
+        if (!r.isActive) return r;
+        if (r.time !== currentTimeStr) return r;
+        if (r.lastTriggeredDate === currentDateStr) return r;
+
+        // Match repetition pattern
+        let matches = false;
+        if (r.repeatType === 'once' || r.repeatType === 'every_day') {
+          matches = true;
+        } else if (r.repeatType === 'every_week') {
+          matches = r.dayOfWeek === currentDayOfWeek;
+        } else if (r.repeatType === 'every_month') {
+          matches = r.dayOfMonth === currentDayOfMonth;
+        }
+
+        if (matches) {
+          hasUpdates = true;
+
+          const opsiTanggal: Intl.DateTimeFormatOptions = { 
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+          };
+          const tanggalFormat = now.toLocaleDateString('id-ID', opsiTanggal);
+          const jamFormat = now.toLocaleTimeString('id-ID', { 
+            hour: '2-digit', minute: '2-digit', hour12: false 
+          }).replace(':', '.');
+          const waktuSekarang = `${tanggalFormat} - Pukul ${jamFormat}`;
+
+          newNotifs.push({
+            id: `n-alarm-${Date.now()}-${r.id}`,
+            title: 'Alarm Pengingat',
+            message: `⏰ Pengingat: "${r.title}"! Waktu terjadwal: ${r.time}.`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'success'
+          });
+
+          return {
+            ...r,
+            lastTriggeredDate: currentDateStr,
+            isActive: r.repeatType === 'once' ? false : r.isActive
+          };
+        }
+        return r;
+      });
+
+      if (hasUpdates) {
+        const nextNotifs = [...newNotifs, ...notifications];
+        setReminders(updatedReminders);
+        setNotifications(nextNotifs);
+
+        const storagePrefix = getStoragePrefix(currentUser.email);
+        localStorage.setItem(`${storagePrefix}reminders`, JSON.stringify(updatedReminders));
+        localStorage.setItem(`${storagePrefix}notifications`, JSON.stringify(nextNotifs));
+      }
+    };
+
+    // Check immediately on mount/state update
+    checkAlarms();
+
+    const intervalId = setInterval(checkAlarms, 20000);
+    return () => clearInterval(intervalId);
+  }, [currentUser, reminders, notifications]);
+
   // Guard routing view: Login Check
   if (!currentUser) {
     return <Login onLogin={handleLogin} />;
@@ -959,6 +1199,7 @@ export default function App() {
               onChangeTab={setActiveTab}
               onOpenPocketManager={() => setIsPocketManagerOpen(true)}
               onOpenBudgetModal={() => setIsBudgetModalOpen(true)}
+              onOpenReminderModal={() => setIsReminderModalOpen(true)}
               onEditTransactionSelect={handleEditTransactionSelect}
               onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
               onOpenHistory={handleOpenHistory}
@@ -1070,6 +1311,16 @@ export default function App() {
         onReorderCategories={handleReorderCategories}
       />
 
+      {/* Reminder Modal */}
+      <ReminderModal
+        isOpen={isReminderModalOpen}
+        onClose={() => setIsReminderModalOpen(false)}
+        reminders={reminders}
+        onAddReminder={handleAddReminder}
+        onToggleReminder={handleToggleReminder}
+        onDeleteReminder={handleDeleteReminder}
+      />
+
 
       {/* FIXED BOTTOM HUD NAVIGATION (Verbatim mockups layout) */}
       <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50 rounded-t-2xl bg-surface/70 border-t border-white/5 backdrop-blur-2xl px-6 pt-2 pb-6 shadow-[0_-4px_30px_rgba(0,0,0,0.5)]">
@@ -1152,5 +1403,6 @@ const readStoredState = (email?: string) => {
     notifications: readItem('notifications'),
     accounts: readItem('accounts'),
     categories: readItem('categories'),
+    reminders: readItem('reminders'),
   };
 };

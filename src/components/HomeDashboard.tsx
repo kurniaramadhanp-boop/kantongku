@@ -14,6 +14,7 @@ import {
   Send, 
   Receipt, 
   AlertTriangle,
+  AlarmClock,
   Wallet,
   Sliders,
   Sparkles,
@@ -51,6 +52,7 @@ interface HomeDashboardProps {
   onChangeTab: (tab: string) => void;
   onOpenPocketManager: () => void;
   onOpenBudgetModal: () => void;
+  onOpenReminderModal: () => void;
   onEditTransactionSelect: (transaction: Transaction) => void;
   onMarkAllNotificationsRead: () => void;
   onOpenHistory: () => void;
@@ -68,6 +70,7 @@ export default function HomeDashboard({
   onChangeTab,
   onOpenPocketManager,
   onOpenBudgetModal,
+  onOpenReminderModal,
   onEditTransactionSelect,
   onMarkAllNotificationsRead,
   onOpenHistory
@@ -343,9 +346,9 @@ export default function HomeDashboard({
             })}
           </div>
 
-          {/* Quick Action Matrix Grid - REVISI: LAPORAN WA DIHAPUS (SEKARANG 3 KOLOM) */}
+          {/* Quick Action Matrix Grid - 4 KOLOM */}
           <section className="py-2">
-            <div className="grid grid-cols-3 gap-2 w-full">
+            <div className="grid grid-cols-4 gap-2 w-full">
               <button 
                 onClick={onOpenAddModal}
                 className="flex flex-col items-center gap-2 group w-full"
@@ -374,6 +377,16 @@ export default function HomeDashboard({
                   <Receipt className="w-5 h-5" />
                 </div>
                 <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Target & Limit</span>
+              </button>
+
+              <button 
+                onClick={onOpenReminderModal}
+                className="flex flex-col items-center gap-2 group w-full"
+              >
+                <div className="w-14 h-14 rounded-full bg-surface-variant border border-white/10 flex items-center justify-center text-primary group-hover:bg-primary/10 group-active:scale-95 transition-all shadow-[0_0_10px_rgba(78,222,163,0.05)]">
+                  <AlarmClock className="w-5 h-5" />
+                </div>
+                <span className="font-label-caps text-on-surface-variant text-center text-[10px]">Pengingat</span>
               </button>
             </div>
           </section>
