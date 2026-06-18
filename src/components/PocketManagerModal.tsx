@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pocket, Transaction } from '../types';
 import { 
   X, 
@@ -31,6 +31,7 @@ import {
   ArrowDown
 } from 'lucide-react';
 import { formatRupiah } from '../utils';
+import CalcKeyboard, { formatEquation, evaluateEquation } from './CalcKeyboard';
 
 interface PocketManagerModalProps {
   isOpen: boolean;
@@ -114,18 +115,20 @@ export default function PocketManagerModal({
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
   const [initialBalance, setInitialBalance] = useState<number>(0);
+  const [initialBalanceExpr, setInitialBalanceExpr] = useState<string>('');
+  const [showCalc, setShowCalc] = useState<boolean>(false);
   const [icon, setIcon] = useState('wallet');
   const [color, setColor] = useState('emerald');
 
   const [deleteWarning, setDeleteWarning] = useState<string | null>(null);
-
-  if (!isOpen) return null;
 
   // Handle open add pocket form
   const handleOpenAdd = () => {
     setName('');
     setTag('');
     setInitialBalance(0);
+    setInitialBalanceExpr('');
+    setShowCalc(false);
     setIcon('wallet');
     setColor('emerald');
     setFormMode('add');
@@ -137,10 +140,44 @@ export default function PocketManagerModal({
     setEditingPocketId(pocket.id);
     setName(pocket.name);
     setTag(pocket.tag);
+    setInitialBalance(pocket.balance);
+    setInitialBalanceExpr(pocket.balance.toString());
+    setShowCalc(false);
     setIcon(pocket.icon);
     setColor(pocket.color);
     setFormMode('edit');
     setDeleteWarning(null);
+  };
+
+  // Dynamically update evaluated amount from raw expression
+  useEffect(() => {
+    const evaluated = evaluateEquation(initialBalanceExpr);
+    setInitialBalance(evaluated);
+  }, [initialBalanceExpr]);
+
+  const handleCalcKeyPress = (key: string) => {
+    setInitialBalanceExpr(prev => {
+      const operators = ['+', '-', '*', '/'];
+      if (operators.includes(key) && operators.includes(prev.slice(-1))) {
+        return prev.slice(0, -1) + key;
+      }
+      return prev + key;
+    });
+  };
+
+  const handleCalcClear = () => {
+    setInitialBalanceExpr('');
+    setInitialBalance(0);
+  };
+
+  const handleCalcDelete = () => {
+    setInitialBalanceExpr(prev => prev.slice(0, -1));
+  };
+
+  const handleCalcEvaluate = () => {
+    const res = evaluateEquation(initialBalanceExpr);
+    setInitialBalance(res);
+    setInitialBalanceExpr(res > 0 ? res.toString() : '');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -201,8 +238,10 @@ export default function PocketManagerModal({
     return found ? found.hex : '#94A3B8';
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-6 select-none">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-6 select-none font-body-md text-white">
       {/* Background overlay */}
       <div className="absolute inset-0 bg-black/70 backdrop-blur-md" onClick={onClose} />
       
@@ -365,17 +404,29 @@ export default function PocketManagerModal({
                     <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
+                      inputMode="none"
                       placeholder="0"
-                      value={initialBalance ? formatRupiah(initialBalance, false) : ''}
+                      value={formatEquation(initialBalanceExpr) || ''}
+                      onFocus={() => setShowCalc(true)}
                       onChange={(e) => {
-                        const raw = e.target.value.replace(/[^0-9]/g, '');
-                        setInitialBalance(Number(raw) || 0);
+                        const clean = e.target.value.replace(/[^0-9+\-*/]/g, '');
+                        setInitialBalanceExpr(clean);
                       }}
                       className="h-11 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
                     />
                   </div>
+                </div>
+              )}
+
+              {formMode === 'add' && showCalc && (
+                <div className="mt-2 border-t border-white/5 pt-3 animate-fade-in">
+                  <CalcKeyboard
+                    onKeyPress={handleCalcKeyPress}
+                    onClear={handleCalcClear}
+                    onDelete={handleCalcDelete}
+                    onEvaluate={handleCalcEvaluate}
+                    onOk={() => setShowCalc(false)}
+                  />
                 </div>
               )}
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Account, Pocket, Transaction } from '../types';
 import { formatRupiah } from '../utils';
+import CalcKeyboard, { formatEquation, evaluateEquation } from './CalcKeyboard';
 import { 
   Plus, 
   Trash2, 
@@ -22,7 +23,7 @@ interface AccountViewProps {
   pockets: Pocket[];
   transactions: Transaction[];
   onAddAccount: (account: Omit<Account, 'balance'> & { initialBalance: number }) => void;
-  onEditAccount: (account: Account) => void;
+  onEditAccount: (account: Account, balanceDifference?: number) => void;
   onDeleteAccount: (id: string) => void;
   onSaveAllocations: (accountId: string, allocations: Record<string, number>) => void;
 }
@@ -60,30 +61,72 @@ export default function AccountView({
   const [name, setName] = useState('');
   const [tag, setTag] = useState('');
   const [initialBalance, setInitialBalance] = useState<number>(0);
+  const [initialBalanceExpr, setInitialBalanceExpr] = useState<string>('');
+  const [showInitialCalc, setShowInitialCalc] = useState<boolean>(false);
   const [icon, setIcon] = useState('bank');
   const [color, setColor] = useState('indigo');
 
   // Allocation States
   const [isEditingAllocation, setIsEditingAllocation] = useState(false);
   const [allocationInputs, setAllocationInputs] = useState<Record<string, number>>({});
+  const [allocationExprs, setAllocationExprs] = useState<Record<string, string>>({});
+  const [activeAllocPocketId, setActiveAllocPocketId] = useState<string | null>(null);
+  const [showAllocCalc, setShowAllocCalc] = useState<boolean>(false);
 
   // Reset editing allocation state when wallet selection changes
   useEffect(() => {
     setIsEditingAllocation(false);
   }, [selectedAccountId]);
 
+  // Dynamically update evaluated amount from raw expression for wallet initial balance
+  useEffect(() => {
+    const evaluated = evaluateEquation(initialBalanceExpr);
+    setInitialBalance(evaluated);
+  }, [initialBalanceExpr]);
+
+  const handleInitialKeyPress = (key: string) => {
+    setInitialBalanceExpr(prev => {
+      const operators = ['+', '-', '*', '/'];
+      if (operators.includes(key) && operators.includes(prev.slice(-1))) {
+        return prev.slice(0, -1) + key;
+      }
+      return prev + key;
+    });
+  };
+
+  const handleInitialClear = () => {
+    setInitialBalanceExpr('');
+    setInitialBalance(0);
+  };
+
+  const handleInitialDelete = () => {
+    setInitialBalanceExpr(prev => prev.slice(0, -1));
+  };
+
+  const handleInitialEvaluate = () => {
+    const res = evaluateEquation(initialBalanceExpr);
+    setInitialBalance(res);
+    setInitialBalanceExpr(res > 0 ? res.toString() : '');
+  };
+
   const handleStartEditAllocation = () => {
     if (!selectedAccountId) return;
     const inputs: Record<string, number> = {};
+    const exprs: Record<string, string> = {};
     pockets.forEach(p => {
       const pocketTrans = transactions.filter(t => t.accountId === selectedAccountId && t.pocketId === p.id);
       const balance = pocketTrans.reduce((sum, t) => {
         const delta = t.type === 'incoming' ? t.amount : -t.amount;
         return sum + delta;
       }, 0);
-      inputs[p.id] = Math.max(0, balance);
+      const bal = Math.max(0, balance);
+      inputs[p.id] = bal;
+      exprs[p.id] = bal > 0 ? bal.toString() : '';
     });
     setAllocationInputs(inputs);
+    setAllocationExprs(exprs);
+    setActiveAllocPocketId(null);
+    setShowAllocCalc(false);
     setIsEditingAllocation(true);
   };
 
@@ -109,13 +152,67 @@ export default function AccountView({
         next['pribadi'] = 0;
         return next;
       });
+      setAllocationExprs(prev => {
+        const next = { ...prev, [pocketId]: cappedVal > 0 ? cappedVal.toString() : '' };
+        next['pribadi'] = '';
+        return next;
+      });
     } else {
       setAllocationInputs(prev => {
         const next = { ...prev, [pocketId]: val };
         next['pribadi'] = targetAcc.balance - otherPocketsAllocSum;
         return next;
       });
+      setAllocationExprs(prev => {
+        const next = { ...prev, [pocketId]: val > 0 ? val.toString() : '' };
+        next['pribadi'] = (targetAcc.balance - otherPocketsAllocSum) > 0 ? (targetAcc.balance - otherPocketsAllocSum).toString() : '';
+        return next;
+      });
     }
+  };
+
+  const handleAllocCalcKeyPress = (key: string) => {
+    if (!activeAllocPocketId) return;
+    setAllocationExprs(prev => {
+      const currentExpr = prev[activeAllocPocketId] || '';
+      const operators = ['+', '-', '*', '/'];
+      let nextExpr = currentExpr;
+      if (operators.includes(key) && operators.includes(currentExpr.slice(-1))) {
+        nextExpr = currentExpr.slice(0, -1) + key;
+      } else {
+        nextExpr = currentExpr + key;
+      }
+      const evaluated = evaluateEquation(nextExpr);
+      handleAllocationInputChange(activeAllocPocketId, evaluated);
+      return { ...prev, [activeAllocPocketId]: nextExpr };
+    });
+  };
+
+  const handleAllocCalcClear = () => {
+    if (!activeAllocPocketId) return;
+    setAllocationExprs(prev => ({ ...prev, [activeAllocPocketId]: '' }));
+    handleAllocationInputChange(activeAllocPocketId, 0);
+  };
+
+  const handleAllocCalcDelete = () => {
+    if (!activeAllocPocketId) return;
+    setAllocationExprs(prev => {
+      const currentExpr = prev[activeAllocPocketId] || '';
+      const nextExpr = currentExpr.slice(0, -1);
+      const evaluated = evaluateEquation(nextExpr);
+      handleAllocationInputChange(activeAllocPocketId, evaluated);
+      return { ...prev, [activeAllocPocketId]: nextExpr };
+    });
+  };
+
+  const handleAllocCalcEvaluate = () => {
+    if (!activeAllocPocketId) return;
+    setAllocationExprs(prev => {
+      const currentExpr = prev[activeAllocPocketId] || '';
+      const evaluated = evaluateEquation(currentExpr);
+      handleAllocationInputChange(activeAllocPocketId, evaluated);
+      return { ...prev, [activeAllocPocketId]: evaluated > 0 ? evaluated.toString() : '' };
+    });
   };
 
   const totalAllocatedInput = Object.values(allocationInputs).reduce((sum, v) => sum + v, 0);
@@ -149,6 +246,7 @@ export default function AccountView({
     setEditingAccountId(acc.id);
     setName(acc.name);
     setTag(acc.tag || '');
+    setInitialBalance(acc.balance);
     setIcon(acc.icon);
     setColor(acc.color);
     setFormMode('edit');
@@ -171,13 +269,14 @@ export default function AccountView({
     } else if (formMode === 'edit' && editingAccountId) {
       const accToEdit = accounts.find(a => a.id === editingAccountId);
       if (!accToEdit) return;
+      const balanceDifference = (initialBalance || 0) - accToEdit.balance;
       onEditAccount({
         ...accToEdit,
         name: name.trim(),
         tag: tag.trim() || 'Rekening kustom',
         icon,
         color
-      });
+      }, balanceDifference);
     }
     setFormMode('list');
   };
@@ -404,6 +503,7 @@ export default function AccountView({
                     <div className="flex flex-col gap-3 max-h-[40vh] overflow-y-auto pr-1 no-scrollbar">
                       {pockets.map(p => {
                         const val = allocationInputs[p.id] || 0;
+                        const expr = allocationExprs[p.id] || '';
                         const isPribadi = p.id === 'pribadi';
                         return (
                           <div key={p.id} className="flex flex-col gap-1.5">
@@ -414,14 +514,22 @@ export default function AccountView({
                               <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
                               <input 
                                 type="text"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
+                                inputMode="none"
                                 disabled={isPribadi}
                                 placeholder="0"
-                                value={val ? formatRupiah(val, false) : ''}
+                                value={isPribadi ? (val ? formatRupiah(val, false) : '') : (formatEquation(expr) || '')}
+                                onFocus={() => {
+                                  if (!isPribadi) {
+                                    setActiveAllocPocketId(p.id);
+                                    setShowAllocCalc(true);
+                                  }
+                                }}
                                 onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9]/g, '');
-                                  handleAllocationInputChange(p.id, Number(raw) || 0);
+                                  if (!isPribadi) {
+                                    const clean = e.target.value.replace(/[^0-9+\-*/]/g, '');
+                                    setAllocationExprs(prev => ({ ...prev, [p.id]: clean }));
+                                    handleAllocationInputChange(p.id, evaluateEquation(clean));
+                                  }
                                 }}
                                 className={`h-10 w-full bg-[#0B111E]/40 border border-white/10 rounded-lg pl-9 pr-3 text-xs text-white focus:outline-none focus:border-primary/60 font-mono-data ${isPribadi ? 'opacity-60 cursor-not-allowed bg-slate-800/20' : ''}`}
                               />
@@ -430,6 +538,18 @@ export default function AccountView({
                         );
                       })}
                     </div>
+
+                    {showAllocCalc && activeAllocPocketId && (
+                      <div className="mt-2 border-t border-white/5 pt-3 animate-fade-in">
+                        <CalcKeyboard
+                          onKeyPress={handleAllocCalcKeyPress}
+                          onClear={handleAllocCalcClear}
+                          onDelete={handleAllocCalcDelete}
+                          onEvaluate={handleAllocCalcEvaluate}
+                          onOk={() => setShowAllocCalc(false)}
+                        />
+                      </div>
+                    )}
 
                     {/* Totals check */}
                     <div className="p-3 bg-surface-variant/30 border border-white/5 rounded-xl text-xs flex flex-col gap-1.5 font-mono-data">
@@ -583,25 +703,37 @@ export default function AccountView({
               />
             </div>
 
-            {/* Initial balance (only on add mode) */}
-            {formMode === 'add' && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-label-caps text-on-surface-variant uppercase">Saldo Awal Wallet (Rp)</label>
-                <div className="relative flex items-center">
-                  <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    placeholder="0"
-                    value={initialBalance ? formatRupiah(initialBalance, false) : ''}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9]/g, '');
-                      setInitialBalance(Number(raw) || 0);
-                    }}
-                    className="h-11 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
-                  />
-                </div>
+            {/* Wallet Balance Input (visible in both Add and Edit modes) */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-label-caps text-on-surface-variant uppercase">
+                {formMode === 'add' ? 'Saldo Awal Wallet (Rp)' : 'Saldo Wallet (Rp)'}
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
+                <input
+                  type="text"
+                  inputMode="none"
+                  placeholder="0"
+                  value={formatEquation(initialBalanceExpr) || ''}
+                  onFocus={() => setShowInitialCalc(true)}
+                  onChange={(e) => {
+                    const clean = e.target.value.replace(/[^0-9+\-*/]/g, '');
+                    setInitialBalanceExpr(clean);
+                  }}
+                  className="h-11 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-9 pr-3 text-sm text-white focus:outline-none focus:border-primary/60 font-mono-data"
+                />
+              </div>
+            </div>
+
+            {showInitialCalc && (
+              <div className="mt-2 border-t border-white/5 pt-3 animate-fade-in">
+                <CalcKeyboard
+                  onKeyPress={handleInitialKeyPress}
+                  onClear={handleInitialClear}
+                  onDelete={handleInitialDelete}
+                  onEvaluate={handleInitialEvaluate}
+                  onOk={() => setShowInitialCalc(false)}
+                />
               </div>
             )}
 

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Budget, Category, Transaction, CategoryType } from '../types';
 import { formatRupiah, getCategoryColorHex } from '../utils';
 import CategoryIcon from './CategoryIcon';
+import CalcKeyboard, { formatEquation, evaluateEquation } from './CalcKeyboard';
 import { 
   Plus, 
   Sparkles, 
@@ -47,8 +48,9 @@ export default function BudgetModal({
   
   // Form Control States
   const [title, setTitle] = useState('');
-  const [limitDisplay, setLimitDisplay] = useState('');
   const [limit, setLimit] = useState<number>(0);
+  const [limitExpr, setLimitExpr] = useState<string>('');
+  const [showCalc, setShowCalc] = useState<boolean>(false);
   const [category, setCategory] = useState<CategoryType>(categories[0]?.id || 'makan');
   const [type, setType] = useState<'expense_limit' | 'target_funding'>('expense_limit');
   
@@ -61,8 +63,6 @@ export default function BudgetModal({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const isTouchDevice = typeof window !== 'undefined' && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
-
-  if (!isOpen) return null;
 
   // LOGIKA OTOMATISASI: Menghitung transaksi di dalam rentang awal s/d akhir siklus secara absolut
   const calculateRealSpent = (catId: string, startStr: string, endStr: string) => {
@@ -86,7 +86,8 @@ export default function BudgetModal({
   const resetForm = () => {
     setTitle('');
     setLimit(0);
-    setLimitDisplay('');
+    setLimitExpr('');
+    setShowCalc(false);
     setCategory(categories[0]?.id || 'makan');
     setType('expense_limit');
     setTimeframe('1_bulan');
@@ -100,13 +101,45 @@ export default function BudgetModal({
     setEditingBudgetId(budget.id);
     setTitle(budget.title);
     setLimit(budget.limit);
-    setLimitDisplay(new Intl.NumberFormat('id-ID').format(budget.limit));
+    setLimitExpr(budget.limit.toString());
+    setShowCalc(false);
     setCategory(budget.category);
     setType(budget.type);
     setTimeframe((budget as any).timeframe || '1_bulan');
     setStartDate((budget as any).startDate || '');
     setEndDate((budget as any).endDate || '');
     setAddMode(true);
+  };
+
+  // Dynamically update evaluated amount from raw expression
+  useEffect(() => {
+    const evaluated = evaluateEquation(limitExpr);
+    setLimit(evaluated);
+  }, [limitExpr]);
+
+  const handleCalcKeyPress = (key: string) => {
+    setLimitExpr(prev => {
+      const operators = ['+', '-', '*', '/'];
+      if (operators.includes(key) && operators.includes(prev.slice(-1))) {
+        return prev.slice(0, -1) + key;
+      }
+      return prev + key;
+    });
+  };
+
+  const handleCalcClear = () => {
+    setLimitExpr('');
+    setLimit(0);
+  };
+
+  const handleCalcDelete = () => {
+    setLimitExpr(prev => prev.slice(0, -1));
+  };
+
+  const handleCalcEvaluate = () => {
+    const res = evaluateEquation(limitExpr);
+    setLimit(res);
+    setLimitExpr(res > 0 ? res.toString() : '');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -195,6 +228,8 @@ export default function BudgetModal({
     setDragId(null);
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-[#060A13]/85 backdrop-blur-md flex items-center justify-center z-[9999] p-4 overflow-y-auto">
       <div className="glass-card rounded-2xl w-full max-w-2xl border border-white/10 relative overflow-hidden flex flex-col my-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)]" onClick={(e) => e.stopPropagation()}>
@@ -251,12 +286,35 @@ export default function BudgetModal({
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[9px] font-label-caps text-on-surface-variant uppercase">Batas Limit / Target Alarm (Rp)</label>
-                    <input type="text" inputMode="numeric" required placeholder="Rp 0" value={limitDisplay} onChange={(e) => {
-                      const raw = e.target.value.replace(/\D/g, '');
-                      setLimit(raw ? Number(raw) : 0);
-                      setLimitDisplay(raw ? new Intl.NumberFormat('id-ID').format(Number(raw)) : '');
-                    }} className="h-9 bg-[#0B111E]/40 rounded-lg text-xs text-white border border-white/10 px-3 font-mono-data focus:outline-none focus:border-primary/60" />
+                    <div className="relative flex items-center">
+                      <span className="absolute left-3 font-mono-data text-primary text-xs font-bold">Rp</span>
+                      <input
+                        type="text"
+                        inputMode="none"
+                        required
+                        placeholder="0"
+                        value={formatEquation(limitExpr) || ''}
+                        onFocus={() => setShowCalc(true)}
+                        onChange={(e) => {
+                          const clean = e.target.value.replace(/[^0-9+\-*/]/g, '');
+                          setLimitExpr(clean);
+                        }}
+                        className="h-9 w-full bg-[#0B111E]/40 rounded-lg text-xs text-white border border-white/10 pl-9 pr-3 font-mono-data focus:outline-none focus:border-primary/60"
+                      />
+                    </div>
                   </div>
+
+                  {showCalc && (
+                    <div className="mt-2 border-t border-white/5 pt-3 animate-fade-in">
+                      <CalcKeyboard
+                        onKeyPress={handleCalcKeyPress}
+                        onClear={handleCalcClear}
+                        onDelete={handleCalcDelete}
+                        onEvaluate={handleCalcEvaluate}
+                        onOk={() => setShowCalc(false)}
+                      />
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[9px] font-label-caps text-on-surface-variant uppercase">Koneksikan Kategori Transaksi</label>

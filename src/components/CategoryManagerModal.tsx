@@ -5,7 +5,7 @@ import {
   Home as HomeIcon, Car, Plane, Gamepad2, GraduationCap, Gift, Briefcase, 
   BookOpen, Wrench, Zap, Wifi, Tv, Film, Shirt, Sparkles, Baby, 
   PawPrint, Smartphone, PiggyBank, Ticket, Bus, Receipt, HeartPulse,
-  GripVertical
+  GripVertical, Info
 } from 'lucide-react';
 import { Category, Transaction } from '../types';
 import CategoryIcon from './CategoryIcon';

@@ -37,6 +37,7 @@ import {
 import { PocketType, CategoryType, Transaction, Pocket, Account, Category } from '../types';
 import { formatRupiah, getCategoryColorHex } from '../utils';
 import CategoryIcon from './CategoryIcon';
+import CalcKeyboard, { formatEquation, evaluateEquation } from './CalcKeyboard';
 
 interface AddTransactionModalProps {
   isOpen: boolean;
@@ -79,6 +80,8 @@ export default function AddTransactionModal({
   // Manual Form States
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState<number>(0);
+  const [amountExpr, setAmountExpr] = useState<string>('');
+  const [showCalc, setShowCalc] = useState<boolean>(false);
   const [pocketId, setPocketId] = useState<PocketType>('');
   const [accountId, setAccountId] = useState<string>('');
   const [category, setCategory] = useState<CategoryType>('makan');
@@ -99,6 +102,8 @@ export default function AddTransactionModal({
       if (editingTransaction) {
         setTitle(editingTransaction.title);
         setAmount(editingTransaction.amount);
+        setAmountExpr(editingTransaction.amount.toString());
+        setShowCalc(false);
         setPocketId(editingTransaction.pocketId);
         setAccountId(editingTransaction.accountId);
         setCategory(editingTransaction.category);
@@ -117,6 +122,8 @@ export default function AddTransactionModal({
       } else {
         setTitle('');
         setAmount(0);
+        setAmountExpr('');
+        setShowCalc(false);
         if (pockets.length > 0) setPocketId(pockets[0].id);
         if (accounts.length > 0) setAccountId(accounts[0].id);
         setCategory(categories[0]?.id || 'makan');
@@ -127,6 +134,38 @@ export default function AddTransactionModal({
       }
     }
   }, [isOpen, editingTransaction, pockets, accounts, categories]);
+
+  // Dynamically update evaluated amount from raw expression
+  useEffect(() => {
+    const evaluated = evaluateEquation(amountExpr);
+    setAmount(evaluated);
+  }, [amountExpr]);
+
+  const handleCalcKeyPress = (key: string) => {
+    setAmountExpr(prev => {
+      const operators = ['+', '-', '*', '/'];
+      // Replace last operator if user types another one consecutively
+      if (operators.includes(key) && operators.includes(prev.slice(-1))) {
+        return prev.slice(0, -1) + key;
+      }
+      return prev + key;
+    });
+  };
+
+  const handleCalcClear = () => {
+    setAmountExpr('');
+    setAmount(0);
+  };
+
+  const handleCalcDelete = () => {
+    setAmountExpr(prev => prev.slice(0, -1));
+  };
+
+  const handleCalcEvaluate = () => {
+    const res = evaluateEquation(amountExpr);
+    setAmount(res);
+    setAmountExpr(res > 0 ? res.toString() : '');
+  };
 
   if (!isOpen) return null;
 
@@ -187,7 +226,9 @@ export default function AddTransactionModal({
   // Central Helper untuk Memetakan Hasil JSON AI ke State Formulir
   const applyAiMetadataToForm = (parsedData: any, sourceName: string) => {
     setTitle(parsedData.catatan || 'Transaksi Baru');
-    setAmount(parsedData.nominal || 0);
+    const nom = Number(parsedData.nominal) || 0;
+    setAmount(nom);
+    setAmountExpr(nom > 0 ? nom.toString() : '');
     setNotes(`Dianalisis otomatis oleh AI (${sourceName}).`);
 
     // 1. Sinkronisasi Kantong (Pocket ID) dari Parameter Kepemilikan AI
@@ -586,9 +627,33 @@ export default function AddTransactionModal({
                 <label className="text-xs font-label-caps text-on-surface-variant uppercase">Nominal (Rp)</label>
                 <div className="relative flex items-center">
                   <span className="absolute left-4 font-mono-data text-primary text-sm font-bold">Rp</span>
-                  <input type="text" required placeholder="0" value={formatRupiah(amount, false) || ''} onChange={(e) => { const raw = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, ''); const num = Number(raw); setAmount(isNaN(num) ? 0 : num); }} className="h-12 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-12 pr-4 text-white focus:outline-none focus:border-primary/60 font-mono-data" />
+                  <input
+                    type="text"
+                    inputMode="none"
+                    required
+                    placeholder="0"
+                    value={formatEquation(amountExpr) || ''}
+                    onFocus={() => setShowCalc(true)}
+                    onChange={(e) => {
+                      const clean = e.target.value.replace(/[^0-9+\-*/]/g, '');
+                      setAmountExpr(clean);
+                    }}
+                    className="h-12 w-full bg-surface-variant/40 border border-white/10 rounded-lg pl-12 pr-4 text-white focus:outline-none focus:border-primary/60 font-mono-data"
+                  />
                 </div>
               </div>
+
+              {showCalc && (
+                <div className="mt-2 border-t border-white/5 pt-3 animate-fade-in">
+                  <CalcKeyboard
+                    onKeyPress={handleCalcKeyPress}
+                    onClear={handleCalcClear}
+                    onDelete={handleCalcDelete}
+                    onEvaluate={handleCalcEvaluate}
+                    onOk={() => setShowCalc(false)}
+                  />
+                </div>
+              )}
 
               {/* Selector Waktu */}
               <div className="flex flex-col gap-1.5">

@@ -41,8 +41,6 @@ export default function TransactionHistoryView({
   const [typeFilter, setTypeFilter] = useState<'all' | 'incoming' | 'outgoing'>('all');
   const [showFilters, setShowFilters] = useState(!!initialFilter?.category);
 
-  if (!isOpen) return null;
-
   const getCategoryColorClasses = (catId: string) => {
     const cat = categories.find(c => c.id === catId);
     const hex = cat ? getCategoryColorHex(cat.color) : '#64748B';
@@ -104,6 +102,8 @@ export default function TransactionHistoryView({
   };
 
   const hasActiveFilters = search || dateFrom || dateTo || selectedCategories.length > 0 || selectedPockets.length > 0 || selectedAccounts.length > 0 || typeFilter !== 'all';
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-2 sm:p-4">

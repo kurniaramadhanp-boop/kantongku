@@ -678,9 +678,30 @@ export default function App() {
     updateStateAndStorage(nextTransactions, pockets, nextAccounts);
   };
 
-  const handleEditAccount = (updatedAccount: Account) => {
-    const nextAccounts = accounts.map(a => a.id === updatedAccount.id ? updatedAccount : a);
-    updateStateAndStorage(transactions, pockets, nextAccounts);
+  const handleEditAccount = (updatedAccount: Account, balanceDifference?: number) => {
+    let nextTransactions = transactions;
+    if (balanceDifference && balanceDifference !== 0) {
+      // Create adjustment transaction to keep pocket/wallet calculations balanced
+      const adjTrans: Transaction = {
+        id: `t-accadj-${Date.now()}`,
+        title: `Penyesuaian Saldo ${updatedAccount.name}`,
+        amount: Math.abs(balanceDifference),
+        type: balanceDifference > 0 ? 'incoming' : 'outgoing',
+        pocketId: 'pribadi', // Adjust against Kantong Pribadi
+        accountId: updatedAccount.id,
+        category: 'pendapatan',
+        date: new Date().toISOString(),
+        notes: `Penyesuaian saldo wallet secara manual`
+      };
+      nextTransactions = [adjTrans, ...transactions];
+    }
+
+    const nextAccounts = accounts.map(a => 
+      a.id === updatedAccount.id 
+        ? { ...updatedAccount, balance: a.balance + (balanceDifference || 0) } 
+        : a
+    );
+    updateStateAndStorage(nextTransactions, pockets, nextAccounts);
   };
 
   const handleDeleteAccount = (id: string) => {
@@ -1017,6 +1038,7 @@ export default function App() {
         isOpen={isBudgetModalOpen}
         onClose={() => setIsBudgetModalOpen(false)}
         budgets={budgets}
+        transactions={transactions}
         onAddBudget={handleAddBudget}
         onEditBudget={handleEditBudget}
         onDeleteBudget={handleDeleteBudget}
