@@ -107,7 +107,19 @@ export default function App() {
       console.log("[Firebase Auth State] Changed:", firebaseUser);
       if (firebaseUser) {
         // User is logged in
-        const profile = getDefaultProfile(firebaseUser.email, firebaseUser.displayName, firebaseUser.photoURL);
+        const storagePrefix = getStoragePrefix(firebaseUser.email);
+        const storedProfileStr = localStorage.getItem(`${storagePrefix}profile`);
+        let profile;
+        if (storedProfileStr) {
+          try {
+            profile = JSON.parse(storedProfileStr);
+            profile.email = firebaseUser.email;
+          } catch (e) {
+            profile = getDefaultProfile(firebaseUser.email, firebaseUser.displayName, firebaseUser.photoURL);
+          }
+        } else {
+          profile = getDefaultProfile(firebaseUser.email, firebaseUser.displayName, firebaseUser.photoURL);
+        }
         setCurrentUser(profile);
         localStorage.setItem('kantongku_user', JSON.stringify(profile));
         setActiveTab('home');
@@ -289,7 +301,19 @@ export default function App() {
   };
 
   const handleLogin = (email: string) => {
-    const profile = getDefaultProfile(email);
+    const storagePrefix = getStoragePrefix(email);
+    const storedProfileStr = localStorage.getItem(`${storagePrefix}profile`);
+    let profile;
+    if (storedProfileStr) {
+      try {
+        profile = JSON.parse(storedProfileStr);
+        profile.email = email;
+      } catch (e) {
+        profile = getDefaultProfile(email);
+      }
+    } else {
+      profile = getDefaultProfile(email);
+    }
     const stored = readStoredState(email);
 
     if (stored.pockets) {
@@ -773,6 +797,9 @@ export default function App() {
     const updated = { ...currentUser, name, avatarUrl };
     setCurrentUser(updated);
     localStorage.setItem('kantongku_user', JSON.stringify(updated));
+
+    const storagePrefix = getStoragePrefix(currentUser.email);
+    localStorage.setItem(`${storagePrefix}profile`, JSON.stringify(updated));
   };
 
   const handleChangePassword = async (oldPass: string, newPass: string) => {
