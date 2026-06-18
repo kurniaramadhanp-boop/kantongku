@@ -29,32 +29,32 @@ import ReminderModal from './components/ReminderModal';
 // Icons for navigation
 import { Home, Wallet, PlusCircle, LineChart, User, Receipt } from 'lucide-react';
 
-const recalculateBalances = (
-  currentTransactions: Transaction[],
-  currentPockets: Pocket[],
-  currentAccounts: Account[]
-) => {
-  const updatedPockets = currentPockets.map(p => {
-    const pocketTrans = currentTransactions.filter(t => t.pocketId === p.id);
-    const balance = pocketTrans.reduce((sum, t) => {
-      const delta = t.type === 'incoming' ? t.amount : -t.amount;
-      return sum + delta;
-    }, 0);
-    return { ...p, balance: Math.max(0, balance) };
-  });
 
-  const updatedAccounts = currentAccounts.map(a => {
-    const accTrans = currentTransactions.filter(t => t.accountId === a.id);
-    const balance = accTrans.reduce((sum, t) => {
-      const delta = t.type === 'incoming' ? t.amount : -t.amount;
-      return sum + delta;
-    }, 0);
-    return { ...a, balance: Math.max(0, balance) };
-  });
-
-  return { updatedPockets, updatedAccounts };
+const getBudgetCategories = (b: Budget): string[] => {
+  if (b.categories && Array.isArray(b.categories)) return b.categories;
+  if (Array.isArray(b.category)) return b.category;
+  return b.category ? [b.category as string] : [];
 };
 
+const calculateBudgetSpent = (b: Budget, transactionsList: Transaction[]): number => {
+  if (!b.startDate || !b.endDate) return 0;
+  
+  const sDate = new Date(b.startDate);
+  sDate.setHours(0, 0, 0, 0);
+  
+  const eDate = new Date(b.endDate);
+  eDate.setHours(23, 59, 59, 999);
+
+  const categoriesList = getBudgetCategories(b);
+
+  const filteredTrans = transactionsList.filter(t => {
+    if (!categoriesList.includes(t.category)) return false;
+    const tDate = new Date(t.date);
+    return tDate >= sDate && tDate <= eDate;
+  });
+
+  return filteredTrans.reduce((sum, t) => sum + t.amount, 0);
+};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -91,11 +91,15 @@ export default function App() {
 
     if (savedUser) setCurrentUser(parsedUser);
     
-    const { updatedPockets, updatedAccounts } = recalculateBalances(loadedTransactions, loadedPockets, loadedAccounts);
+    const defaultPocketId = loadedPockets[0]?.id || 'pribadi';
+    const initializedAccounts = loadedAccounts.map((a: Account) => ({
+      ...a,
+      allocations: a.allocations || { [defaultPocketId]: a.balance }
+    }));
 
-    setPockets(updatedPockets);
+    setPockets(loadedPockets);
     setTransactions(loadedTransactions);
-    setAccounts(updatedAccounts);
+    setAccounts(initializedAccounts);
     setCategories(loadedCategories);
 
     if (stored.budgets) setBudgets(JSON.parse(stored.budgets));
@@ -133,11 +137,16 @@ export default function App() {
           const loadedTransactions = userStored.transactions ? JSON.parse(userStored.transactions) : INITIAL_TRANSACTIONS;
           const loadedAccounts = userStored.accounts ? JSON.parse(userStored.accounts) : INITIAL_ACCOUNTS;
           const loadedCategories = userStored.categories ? JSON.parse(userStored.categories) : CATEGORIES;
-          const { updatedPockets, updatedAccounts } = recalculateBalances(loadedTransactions, loadedPockets, loadedAccounts);
 
-          setPockets(updatedPockets);
+          const defaultPocketId = loadedPockets[0]?.id || 'pribadi';
+          const initializedAccounts = loadedAccounts.map((a: Account) => ({
+            ...a,
+            allocations: a.allocations || { [defaultPocketId]: a.balance }
+          }));
+
+          setPockets(loadedPockets);
           setTransactions(loadedTransactions);
-          setAccounts(updatedAccounts);
+          setAccounts(initializedAccounts);
           setCategories(loadedCategories);
           if (userStored.budgets) setBudgets(JSON.parse(userStored.budgets));
           if (userStored.notifications) setNotifications(JSON.parse(userStored.notifications));
@@ -305,14 +314,13 @@ export default function App() {
     newNotifications: Notification[] = notifications,
     newCategories: Category[] = categories
   ) => {
-    const { updatedPockets, updatedAccounts } = recalculateBalances(newTransactions, newPockets, newAccounts);
-    setPockets(updatedPockets);
-    setAccounts(updatedAccounts);
+    setPockets(newPockets);
+    setAccounts(newAccounts);
     setTransactions(newTransactions);
     setBudgets(newBudgets);
     setNotifications(newNotifications);
     setCategories(newCategories);
-    saveStateToStorage(updatedPockets, newTransactions, newBudgets, newNotifications, updatedAccounts, newCategories);
+    saveStateToStorage(newPockets, newTransactions, newBudgets, newNotifications, newAccounts, newCategories);
   };
 
   // Sync state mutations to localStorage
@@ -355,11 +363,16 @@ export default function App() {
       const loadedTransactions = stored.transactions ? JSON.parse(stored.transactions) : INITIAL_TRANSACTIONS;
       const loadedAccounts = stored.accounts ? JSON.parse(stored.accounts) : INITIAL_ACCOUNTS;
       const loadedCategories = stored.categories ? JSON.parse(stored.categories) : CATEGORIES;
-      const { updatedPockets, updatedAccounts } = recalculateBalances(loadedTransactions, loadedPockets, loadedAccounts);
 
-      setPockets(updatedPockets);
+      const defaultPocketId = loadedPockets[0]?.id || 'pribadi';
+      const initializedAccounts = loadedAccounts.map((a: Account) => ({
+        ...a,
+        allocations: a.allocations || { [defaultPocketId]: a.balance }
+      }));
+
+      setPockets(loadedPockets);
       setTransactions(loadedTransactions);
-      setAccounts(updatedAccounts);
+      setAccounts(initializedAccounts);
       setCategories(loadedCategories);
       if (stored.budgets) setBudgets(JSON.parse(stored.budgets));
       if (stored.notifications) setNotifications(JSON.parse(stored.notifications));
@@ -391,15 +404,20 @@ export default function App() {
   };
 
   const handleResetData = () => {
-    const { updatedPockets, updatedAccounts } = recalculateBalances(INITIAL_TRANSACTIONS, INITIAL_POCKETS, INITIAL_ACCOUNTS);
-    setPockets(updatedPockets);
+    const defaultPocketId = INITIAL_POCKETS[0]?.id || 'pribadi';
+    const initializedAccounts = INITIAL_ACCOUNTS.map((a: Account) => ({
+      ...a,
+      allocations: a.allocations || { [defaultPocketId]: a.balance }
+    }));
+
+    setPockets(INITIAL_POCKETS);
     setTransactions(INITIAL_TRANSACTIONS);
     setBudgets(INITIAL_BUDGETS);
     setNotifications(INITIAL_NOTIFICATIONS);
-    setAccounts(updatedAccounts);
+    setAccounts(initializedAccounts);
     setCategories(CATEGORIES);
     setReminders([]);
-    saveStateToStorage(updatedPockets, INITIAL_TRANSACTIONS, INITIAL_BUDGETS, INITIAL_NOTIFICATIONS, updatedAccounts, CATEGORIES);
+    saveStateToStorage(INITIAL_POCKETS, INITIAL_TRANSACTIONS, INITIAL_BUDGETS, INITIAL_NOTIFICATIONS, initializedAccounts, CATEGORIES);
     const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');
     localStorage.removeItem(`${storagePrefix}reminders`);
     alert('Asisten KantongKu berhasil dikembalikan ke data mockup awal.');
@@ -423,10 +441,38 @@ export default function App() {
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
+    // Update pocket balance directly
+    const delta = newTransaction.type === 'incoming' ? newTransaction.amount : -newTransaction.amount;
+    const nextPockets = pockets.map(p => {
+      if (p.id === newTransaction.pocketId) {
+        return { ...p, balance: Math.max(0, p.balance + delta) };
+      }
+      return p;
+    });
+
+    // Update account balance and pocket allocation directly
+    const nextAccounts = accounts.map(a => {
+      if (a.id === newTransaction.accountId) {
+        const currentAllocations = a.allocations || {};
+        const pocketAlloc = currentAllocations[newTransaction.pocketId] || 0;
+        return {
+          ...a,
+          balance: Math.max(0, a.balance + delta),
+          allocations: {
+            ...currentAllocations,
+            [newTransaction.pocketId]: Math.max(0, pocketAlloc + delta)
+          }
+        };
+      }
+      return a;
+    });
+
     // Increment budget spending if it matches categories
     const nextBudgets = budgets.map((b) => {
-      if (b.category === newTransaction.category && newTransaction.type === 'outgoing') {
-        const nextSpent = b.spent + newTransaction.amount;
+      const cats = getBudgetCategories(b);
+      const isMatch = cats.includes(newTransaction.category);
+      if (isMatch) {
+        const nextSpent = calculateBudgetSpent(b, nextTransactions);
         const remaining = b.limit - nextSpent;
         const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
         return {
@@ -472,26 +518,31 @@ export default function App() {
     nextNotifications = [successNotif, ...nextNotifications];
 
     // Check if target limits have been surpassed or reached warning zone
-    const targetBudgetObj = nextBudgets.find(b => b.category === newTransaction.category);
+    const matchedBudgets = nextBudgets.filter(b => {
+      return getBudgetCategories(b).includes(newTransaction.category);
+    });
 
-    if (targetBudgetObj) {
+    matchedBudgets.forEach(targetBudgetObj => {
       // 1. HITUNG PERSENTASE SEBELUM TRANSAKSI BARU MASUK
-      const oldSpent = targetBudgetObj.spent - newTransaction.amount;
+      const oldSpent = calculateBudgetSpent(targetBudgetObj, transactions);
       const oldProgressPercent = Math.round((oldSpent / targetBudgetObj.limit) * 100);
+      const oldSisaPercent = Math.max(0, Math.round(((targetBudgetObj.limit - oldSpent) / targetBudgetObj.limit) * 100));
       
       // 2. HITUNG PERSENTASE SETELAH TRANSAKSI BARU MASUK
       const progressPercent = Math.round((targetBudgetObj.spent / targetBudgetObj.limit) * 100);
+      const newSisaPercent = targetBudgetObj.sisaPercent;
 
       // ==========================================
       // JALUR A: EXPENSE LIMIT (Sisa Anggaran Turun)
+      // Aturan Pengingat Milestone: 50%, 30%, 15%, 0% sisa anggaran
       // ==========================================
       if (targetBudgetObj.type === 'expense_limit' && newTransaction.type === 'outgoing') {
-        // Warning 80%
-        if (oldProgressPercent < 80 && progressPercent >= 80 && progressPercent < 100) {
+        // Milestone 50%
+        if (oldSisaPercent > 50 && newSisaPercent <= 50 && newSisaPercent > 30) {
           const warningNotif: Notification = {
-            id: `n-warn-80-${Date.now()}`,
+            id: `n-warn-50-${Date.now()}-${targetBudgetObj.id}`,
             title: 'Peringatan Anggaran',
-            message: `⚠️ Peringatan: Total pengeluaran kategori "${targetBudgetObj.title}" telah melebihi 80% dari batas bulanan (${progressPercent}% terpakai).`,
+            message: `⚠️ Peringatan: Sisa anggaran "${targetBudgetObj.title}" kurang dari 50% (${newSisaPercent}% tersisa).`,
             time: waktuSekarang,
             isRead: false,
             type: 'warning'
@@ -499,12 +550,38 @@ export default function App() {
           nextNotifications = [warningNotif, ...nextNotifications];
         }
         
-        // Warning 100%
-        if (oldProgressPercent < 100 && progressPercent >= 100) {
+        // Milestone 30%
+        if (oldSisaPercent > 30 && newSisaPercent <= 30 && newSisaPercent > 15) {
+          const warningNotif: Notification = {
+            id: `n-warn-30-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Peringatan Anggaran',
+            message: `⚠️ Peringatan: Sisa anggaran "${targetBudgetObj.title}" kurang dari 30% (${newSisaPercent}% tersisa).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [warningNotif, ...nextNotifications];
+        }
+
+        // Milestone 15%
+        if (oldSisaPercent > 15 && newSisaPercent <= 15 && newSisaPercent > 0) {
           const criticalNotif: Notification = {
-            id: `n-warn-100-${Date.now()}`,
+            id: `n-warn-15-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Peringatan Kritis Anggaran',
+            message: `⚠️ Peringatan Kritis: Sisa anggaran "${targetBudgetObj.title}" kurang dari 15% (${newSisaPercent}% tersisa). Batasi pengeluaran Anda!`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [criticalNotif, ...nextNotifications];
+        }
+
+        // Milestone 0%
+        if (oldSisaPercent > 0 && newSisaPercent === 0) {
+          const criticalNotif: Notification = {
+            id: `n-warn-0-${Date.now()}-${targetBudgetObj.id}`,
             title: 'Batas Anggaran Tercapai',
-            message: `🚨 Peringatan Kritis: Total pengeluaran kategori "${targetBudgetObj.title}" telah mencapai atau melebihi 100% dari batas bulanan (${progressPercent}% terpakai).`,
+            message: `🚨 Peringatan Kritis: Anggaran "${targetBudgetObj.title}" telah habis terpakai (0% tersisa).`,
             time: waktuSekarang,
             isRead: false,
             type: 'warning'
@@ -530,7 +607,7 @@ export default function App() {
           }
 
           const alertNotif: Notification = {
-            id: `n-sav-${Date.now()}-${triggeredMilestone}`,
+            id: `n-sav-${Date.now()}-${triggeredMilestone}-${targetBudgetObj.id}`,
             title: 'Target Celengan',
             message: msg,
             time: waktuSekarang,
@@ -541,9 +618,9 @@ export default function App() {
           nextNotifications = [alertNotif, ...nextNotifications];
         }
       }
-    }
+    });
 
-    updateStateAndStorage(nextTransactions, pockets, accounts, nextBudgets, nextNotifications);
+    updateStateAndStorage(nextTransactions, nextPockets, nextAccounts, nextBudgets, nextNotifications);
   };
 
   // Delete transaction operation
@@ -553,10 +630,38 @@ export default function App() {
 
     const nextTransactions = transactions.filter(t => t.id !== id);
 
+    // Revert pocket balance
+    const nextPockets = pockets.map(p => {
+      if (p.id === target.pocketId) {
+        const delta = target.type === 'incoming' ? -target.amount : target.amount;
+        return { ...p, balance: Math.max(0, p.balance + delta) };
+      }
+      return p;
+    });
+
+    // Revert account balance and pocket allocation
+    const nextAccounts = accounts.map(a => {
+      if (a.id === target.accountId) {
+        const delta = target.type === 'incoming' ? -target.amount : target.amount;
+        const currentAllocations = a.allocations || {};
+        const pocketAlloc = currentAllocations[target.pocketId] || 0;
+        return {
+          ...a,
+          balance: Math.max(0, a.balance + delta),
+          allocations: {
+            ...currentAllocations,
+            [target.pocketId]: Math.max(0, pocketAlloc + delta)
+          }
+        };
+      }
+      return a;
+    });
+
     // Rollback budget spent counters
     const nextBudgets = budgets.map((b) => {
-      if (b.category === target.category && target.type === 'outgoing') {
-        const nextSpent = Math.max(0, b.spent - target.amount);
+      const cats = getBudgetCategories(b);
+      if (cats.includes(target.category)) {
+        const nextSpent = calculateBudgetSpent(b, nextTransactions);
         const remaining = b.limit - nextSpent;
         const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
         return { ...b, spent: nextSpent, sisaPercent: nextPercent };
@@ -564,7 +669,7 @@ export default function App() {
       return b;
     });
 
-    updateStateAndStorage(nextTransactions, pockets, accounts, nextBudgets);
+    updateStateAndStorage(nextTransactions, nextPockets, nextAccounts, nextBudgets);
   };
 
   const handleEditTransactionSelect = (t: Transaction) => {
@@ -576,59 +681,164 @@ export default function App() {
     const originalTrans = transactions.find(t => t.id === editedTrans.id);
     if (!originalTrans) return;
 
-    // 1. Revert original transaction's effect on budgets
-    let nextBudgets = budgets.map((b) => {
-      if (b.category === originalTrans.category && originalTrans.type === 'outgoing') {
-        const nextSpent = Math.max(0, b.spent - originalTrans.amount);
-        const remaining = b.limit - nextSpent;
-        const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
-        return { ...b, spent: nextSpent, sisaPercent: nextPercent };
+    // 1. Revert original transaction balance changes
+    let nextPockets = pockets.map(p => {
+      if (p.id === originalTrans.pocketId) {
+        const delta = originalTrans.type === 'incoming' ? -originalTrans.amount : originalTrans.amount;
+        return { ...p, balance: Math.max(0, p.balance + delta) };
       }
-      return b;
+      return p;
     });
 
-    // 2. Apply new transaction's effect on budgets
-    nextBudgets = nextBudgets.map((b) => {
-      if (b.category === editedTrans.category && editedTrans.type === 'outgoing') {
-        const nextSpent = b.spent + editedTrans.amount;
-        const remaining = b.limit - nextSpent;
-        const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
-        return { ...b, spent: nextSpent, sisaPercent: nextPercent };
+    let nextAccounts = accounts.map(a => {
+      if (a.id === originalTrans.accountId) {
+        const delta = originalTrans.type === 'incoming' ? -originalTrans.amount : originalTrans.amount;
+        const currentAllocations = a.allocations || {};
+        const pocketAlloc = currentAllocations[originalTrans.pocketId] || 0;
+        return {
+          ...a,
+          balance: Math.max(0, a.balance + delta),
+          allocations: {
+            ...currentAllocations,
+            [originalTrans.pocketId]: Math.max(0, pocketAlloc + delta)
+          }
+        };
       }
-      return b;
+      return a;
     });
 
-    // 3. Update the transaction in the list
+    // 2. Apply edited transaction balance changes
+    nextPockets = nextPockets.map(p => {
+      if (p.id === editedTrans.pocketId) {
+        const delta = editedTrans.type === 'incoming' ? editedTrans.amount : -editedTrans.amount;
+        return { ...p, balance: Math.max(0, p.balance + delta) };
+      }
+      return p;
+    });
+
+    nextAccounts = nextAccounts.map(a => {
+      if (a.id === editedTrans.accountId) {
+        const delta = editedTrans.type === 'incoming' ? editedTrans.amount : -editedTrans.amount;
+        const currentAllocations = a.allocations || {};
+        const pocketAlloc = currentAllocations[editedTrans.pocketId] || 0;
+        return {
+          ...a,
+          balance: Math.max(0, a.balance + delta),
+          allocations: {
+            ...currentAllocations,
+            [editedTrans.pocketId]: Math.max(0, pocketAlloc + delta)
+          }
+        };
+      }
+      return a;
+    });
+
+    // Update the transaction in the list
     const nextTransactions = transactions.map(t => t.id === editedTrans.id ? editedTrans : t).sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
-    // Fire dynamic alarm notifications
-    let nextNotifications = [...notifications];
-    const targetBudgetObj = nextBudgets.find(b => b.category === editedTrans.category);
-    if (targetBudgetObj && targetBudgetObj.type === 'expense_limit' && editedTrans.type === 'outgoing') {
-      const remainingRatio = (targetBudgetObj.limit - targetBudgetObj.spent) / targetBudgetObj.limit;
-      if (remainingRatio <= 0.20 && remainingRatio > 0) {
-        const alertNotif: Notification = {
-          id: `n-${Date.now()}`,
-          title: 'Rem Finansial',
-          message: `Opps! Sisa anggaran jatah jajan "${targetBudgetObj.title}" sisa ${Math.round(remainingRatio * 100)}%. Batasi pembelian agar tetap aman!`,
-          time: 'Baru Saja',
-          isRead: false,
-          type: 'warning'
-        };
-        nextNotifications = [alertNotif, ...nextNotifications];
+    // Recompute matching budgets' spent counters
+    const nextBudgets = budgets.map((b) => {
+      const cats = getBudgetCategories(b);
+      if (cats.includes(originalTrans.category) || cats.includes(editedTrans.category)) {
+        const nextSpent = calculateBudgetSpent(b, nextTransactions);
+        const remaining = b.limit - nextSpent;
+        const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
+        return { ...b, spent: nextSpent, sisaPercent: nextPercent };
       }
-    }
+      return b;
+    });
 
-    updateStateAndStorage(nextTransactions, pockets, accounts, nextBudgets, nextNotifications);
+    // Fire dynamic alarm notifications on edit
+    let nextNotifications = [...notifications];
+    const matchedBudgets = nextBudgets.filter(b => getBudgetCategories(b).includes(editedTrans.category));
+    
+    // Helper function for dynamic time formatting
+    const dapatkanWaktuSekarangString = (): string => {
+      const sekarang = new Date();
+      const opsiTanggal: Intl.DateTimeFormatOptions = { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      };
+      const tanggalFormat = sekarang.toLocaleDateString('id-ID', opsiTanggal);
+      const jamFormat = sekarang.toLocaleTimeString('id-ID', { 
+        hour: '2-digit', minute: '2-digit', hour12: false 
+      }).replace(':', '.');
+
+      return `${tanggalFormat} - Pukul ${jamFormat}`;
+    };
+
+    const waktuSekarang = dapatkanWaktuSekarangString();
+
+    matchedBudgets.forEach(targetBudgetObj => {
+      const oldSpent = calculateBudgetSpent(targetBudgetObj, transactions);
+      const oldSisaPercent = Math.max(0, Math.round(((targetBudgetObj.limit - oldSpent) / targetBudgetObj.limit) * 100));
+      
+      const newSisaPercent = targetBudgetObj.sisaPercent;
+
+      if (targetBudgetObj.type === 'expense_limit' && editedTrans.type === 'outgoing') {
+        // Milestone 50%
+        if (oldSisaPercent > 50 && newSisaPercent <= 50 && newSisaPercent > 30) {
+          const warningNotif: Notification = {
+            id: `n-warn-50-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Peringatan Anggaran',
+            message: `⚠️ Peringatan: Sisa anggaran "${targetBudgetObj.title}" kurang dari 50% (${newSisaPercent}% tersisa).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [warningNotif, ...nextNotifications];
+        }
+        
+        // Milestone 30%
+        if (oldSisaPercent > 30 && newSisaPercent <= 30 && newSisaPercent > 15) {
+          const warningNotif: Notification = {
+            id: `n-warn-30-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Peringatan Anggaran',
+            message: `⚠️ Peringatan: Sisa anggaran "${targetBudgetObj.title}" kurang dari 30% (${newSisaPercent}% tersisa).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [warningNotif, ...nextNotifications];
+        }
+
+        // Milestone 15%
+        if (oldSisaPercent > 15 && newSisaPercent <= 15 && newSisaPercent > 0) {
+          const criticalNotif: Notification = {
+            id: `n-warn-15-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Peringatan Kritis Anggaran',
+            message: `⚠️ Peringatan Kritis: Sisa anggaran "${targetBudgetObj.title}" kurang dari 15% (${newSisaPercent}% tersisa). Batasi pengeluaran Anda!`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [criticalNotif, ...nextNotifications];
+        }
+
+        // Milestone 0%
+        if (oldSisaPercent > 0 && newSisaPercent === 0) {
+          const criticalNotif: Notification = {
+            id: `n-warn-0-${Date.now()}-${targetBudgetObj.id}`,
+            title: 'Batas Anggaran Tercapai',
+            message: `🚨 Peringatan Kritis: Anggaran "${targetBudgetObj.title}" telah habis terpakai (0% tersisa).`,
+            time: waktuSekarang,
+            isRead: false,
+            type: 'warning'
+          };
+          nextNotifications = [criticalNotif, ...nextNotifications];
+        }
+      }
+    });
+
+    updateStateAndStorage(nextTransactions, nextPockets, nextAccounts, nextBudgets, nextNotifications);
     setEditingTransaction(null);
   };
 
   // Core add budget target logic
-  const handleAddBudget = (newBudData: Omit<Budget, 'id' | 'sisaPercent'>) => {
-    const remaining = newBudData.limit - newBudData.spent;
-    const initialPercent = Math.max(0, Math.round((remaining / newBudData.limit) * 100));
+  const handleAddBudget = (newBudData: any) => {
+    const remaining = (newBudData.limit || 0) - (newBudData.spent || 0);
+    const initialPercent = Math.max(0, Math.round((remaining / (newBudData.limit || 1)) * 100));
     
     const newBudget: Budget = {
       ...newBudData,
@@ -731,172 +941,183 @@ export default function App() {
       return;
     }
 
-    // Create double-entry transactions (out from source, in to destination)
     const fromLabel = pockets.find(p => p.id === fromId)?.name || 'Sumber';
     const toLabel = pockets.find(p => p.id === toId)?.name || 'Tujuan';
-    const primaryAccId = accounts[0]?.id || 'acc-bca';
-    
-    const outTrans: Transaction = {
-      id: `t-trsf-out-${Date.now()}`,
-      title: `Trsf ke Kantong ${toLabel}`,
-      amount: amount,
-      type: 'outgoing',
-      pocketId: fromId,
-      accountId: primaryAccId,
-      category: 'lainnya',
-      date: new Date().toISOString()
-    };
 
-    const inTrans: Transaction = {
-      id: `t-trsf-in-${Date.now()}`,
-      title: `Trsf dari Kantong ${fromLabel}`,
-      amount: amount,
-      type: 'incoming',
-      pocketId: toId,
-      accountId: primaryAccId,
-      category: 'lainnya',
-      date: new Date().toISOString()
-    };
+    // 1. Run greedy Smart Allocation Balancer
+    let remainingToTransfer = amount;
+    const nextAccounts = accounts.map(a => ({
+      ...a,
+      allocations: { ...(a.allocations || {}) }
+    }));
 
-    const nextTransactions = [outTrans, inTrans, ...transactions];
+    while (remainingToTransfer > 0) {
+      let largestAccIndex = -1;
+      let largestAllocVal = 0;
+
+      for (let i = 0; i < nextAccounts.length; i++) {
+        const alloc = nextAccounts[i].allocations[fromId] || 0;
+        if (alloc > largestAllocVal) {
+          largestAllocVal = alloc;
+          largestAccIndex = i;
+        }
+      }
+
+      if (largestAccIndex === -1 || largestAllocVal <= 0) {
+        break;
+      }
+
+      const subtractAmount = Math.min(remainingToTransfer, largestAllocVal);
+      const acc = nextAccounts[largestAccIndex];
+      acc.allocations[fromId] = (acc.allocations[fromId] || 0) - subtractAmount;
+      acc.allocations[toId] = (acc.allocations[toId] || 0) + subtractAmount;
+
+      remainingToTransfer -= subtractAmount;
+    }
+
+    // 2. Recompute pocket balances
+    const nextPockets = pockets.map(p => {
+      const totalBalance = nextAccounts.reduce((sum, a) => {
+        return sum + (a.allocations?.[p.id] || 0);
+      }, 0);
+      return { ...p, balance: totalBalance };
+    });
+
+    // 3. Create success notification
+    const dapatkanWaktuSekarangString = (): string => {
+      const sekarang = new Date();
+      const opsiTanggal: Intl.DateTimeFormatOptions = { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      };
+      const tanggalFormat = sekarang.toLocaleDateString('id-ID', opsiTanggal);
+      const jamFormat = sekarang.toLocaleTimeString('id-ID', { 
+        hour: '2-digit', minute: '2-digit', hour12: false 
+      }).replace(':', '.');
+
+      return `${tanggalFormat} - Pukul ${jamFormat}`;
+    };
 
     const transferNotif: Notification = {
       id: `n-trans-${Date.now()}`,
       title: 'Pemindahan Buku Berhasil',
       message: `Pemindahan saldo dari Kantong "${fromLabel}" ke "${toLabel}" sejumlah ${amount.toLocaleString('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 })} berhasil disimpan.`,
-      time: 'Baru Saja',
+      time: dapatkanWaktuSekarangString(),
       isRead: false,
       type: 'info'
     };
 
     const nextNotifications = [transferNotif, ...notifications];
 
-    updateStateAndStorage(nextTransactions, pockets, accounts, budgets, nextNotifications);
+    setPockets(nextPockets);
+    setAccounts(nextAccounts);
+    setNotifications(nextNotifications);
+    saveStateToStorage(nextPockets, transactions, budgets, nextNotifications, nextAccounts, categories);
   };
 
   // CRUD Handlers for Accounts (Rekening)
   const handleAddAccount = (newAccData: Omit<Account, 'balance'> & { initialBalance: number }) => {
+    const defaultPocketId = pockets[0]?.id || 'pribadi';
     const newAccount: Account = {
       id: newAccData.id,
       name: newAccData.name,
-      balance: 0,
+      balance: newAccData.initialBalance || 0,
       icon: newAccData.icon,
       color: newAccData.color,
-      tag: newAccData.tag
+      tag: newAccData.tag,
+      allocations: {
+        [defaultPocketId]: newAccData.initialBalance || 0
+      }
     };
 
     const nextAccounts = [...accounts, newAccount];
 
-    // Generating an incoming transaction if initial balance > 0
-    let nextTransactions = transactions;
-    if (newAccData.initialBalance > 0) {
-      const defaultPocketId = pockets.find(p => p.id === 'pribadi')?.id || pockets[0]?.id || 'pribadi';
-      const initialTrans: Transaction = {
-        id: `t-accinit-${Date.now()}`,
-        title: `Saldo Awal ${newAccData.name}`,
-        amount: newAccData.initialBalance,
-        type: 'incoming',
-        pocketId: defaultPocketId,
-        accountId: newAccount.id,
-        category: 'pendapatan',
-        date: new Date().toISOString()
-      };
-      nextTransactions = [initialTrans, ...transactions];
-    }
+    // Update default pocket balance directly
+    const nextPockets = pockets.map(p => {
+      if (p.id === defaultPocketId) {
+        return { ...p, balance: p.balance + (newAccData.initialBalance || 0) };
+      }
+      return p;
+    });
 
-    updateStateAndStorage(nextTransactions, pockets, nextAccounts);
+    setPockets(nextPockets);
+    setAccounts(nextAccounts);
+    saveStateToStorage(nextPockets, transactions, budgets, notifications, nextAccounts, categories);
   };
 
   const handleEditAccount = (updatedAccount: Account, balanceDifference?: number) => {
-    let nextTransactions = transactions;
-    if (balanceDifference && balanceDifference !== 0) {
-      // Create adjustment transaction to keep pocket/wallet calculations balanced
-      const adjTrans: Transaction = {
-        id: `t-accadj-${Date.now()}`,
-        title: `Penyesuaian Saldo ${updatedAccount.name}`,
-        amount: Math.abs(balanceDifference),
-        type: balanceDifference > 0 ? 'incoming' : 'outgoing',
-        pocketId: 'pribadi', // Adjust against Kantong Pribadi
-        accountId: updatedAccount.id,
-        category: 'pendapatan',
-        date: new Date().toISOString(),
-        notes: `Penyesuaian saldo wallet secara manual`
-      };
-      nextTransactions = [adjTrans, ...transactions];
-    }
+    const diff = balanceDifference || 0;
+    const defaultPocketId = pockets[0]?.id || 'pribadi';
+    
+    const nextAccounts = accounts.map(a => {
+      if (a.id === updatedAccount.id) {
+        const currentAllocations = a.allocations || {};
+        const oldDefaultAlloc = currentAllocations[defaultPocketId] || 0;
+        
+        return {
+          ...updatedAccount,
+          balance: a.balance + diff,
+          allocations: {
+            ...currentAllocations,
+            [defaultPocketId]: Math.max(0, oldDefaultAlloc + diff)
+          }
+        };
+      }
+      return a;
+    });
 
-    const nextAccounts = accounts.map(a => 
-      a.id === updatedAccount.id 
-        ? { ...updatedAccount, balance: a.balance + (balanceDifference || 0) } 
-        : a
-    );
-    updateStateAndStorage(nextTransactions, pockets, nextAccounts);
+    const nextPockets = pockets.map(p => {
+      if (p.id === defaultPocketId) {
+        return { ...p, balance: Math.max(0, p.balance + diff) };
+      }
+      return p;
+    });
+
+    setPockets(nextPockets);
+    setAccounts(nextAccounts);
+    saveStateToStorage(nextPockets, transactions, budgets, notifications, nextAccounts, categories);
   };
 
   const handleDeleteAccount = (id: string) => {
-    // 1. Find all transactions associated with this account
-    const targetTrans = transactions.filter(t => t.accountId === id);
-    const targetTransIds = new Set(targetTrans.map(t => t.id));
+    const accountToDelete = accounts.find(a => a.id === id);
+    if (!accountToDelete) return;
 
-    // 2. Rollback budgets spent counter
-    const nextBudgets = budgets.map((b) => {
-      // Find deleted outgoing transactions matching this budget's category
-      const budgetDeletedTrans = targetTrans.filter(t => t.category === b.category && t.type === 'outgoing');
-      const totalAmount = budgetDeletedTrans.reduce((sum, t) => sum + t.amount, 0);
-      const nextSpent = Math.max(0, b.spent - totalAmount);
-      const remaining = b.limit - nextSpent;
-      const nextPercent = Math.max(0, Math.round((remaining / b.limit) * 100));
-      return {
-        ...b,
-        spent: nextSpent,
-        sisaPercent: nextPercent
-      };
+    // Subtract this wallet's pocket allocations from each pocket's balance
+    const nextPockets = pockets.map(p => {
+      const allocatedAmount = accountToDelete.allocations?.[p.id] || 0;
+      return { ...p, balance: Math.max(0, p.balance - allocatedAmount) };
     });
 
-    // 3. Filter out transactions
-    const nextTransactions = transactions.filter(t => !targetTransIds.has(t.id));
-
-    // 4. Delete account
+    // Remove wallet
     const nextAccounts = accounts.filter(a => a.id !== id);
 
-    updateStateAndStorage(nextTransactions, pockets, nextAccounts, nextBudgets);
+    // Keep transaction history completely untouched!
+    setPockets(nextPockets);
+    setAccounts(nextAccounts);
+    saveStateToStorage(nextPockets, transactions, budgets, notifications, nextAccounts, categories);
   };
 
   const handleSaveAllocations = (accountId: string, allocations: Record<string, number>) => {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return;
 
-    const newTransactions: Transaction[] = [];
-    pockets.forEach(p => {
-      // Calculate old allocation (sum of transactions for this account & pocket)
-      const pocketTrans = transactions.filter(t => t.accountId === accountId && t.pocketId === p.id);
-      const oldAlloc = pocketTrans.reduce((sum, t) => {
-        const delta = t.type === 'incoming' ? t.amount : -t.amount;
-        return sum + delta;
-      }, 0);
-
-      const newAlloc = allocations[p.id] || 0;
-      const difference = newAlloc - oldAlloc;
-
-      if (difference !== 0) {
-        // Create adjustment transaction
-        const adjTrans: Transaction = {
-          id: `t-adj-${Date.now()}-${p.id}`,
-          title: `Penyesuaian Alokasi ${p.name}`,
-          amount: Math.abs(difference),
-          type: difference > 0 ? 'incoming' : 'outgoing',
-          pocketId: p.id,
-          accountId: accountId,
-          category: 'lainnya',
-          date: new Date().toISOString(),
-          notes: `Penyesuaian alokasi dana untuk dompet ${account.name}`
-        };
-        newTransactions.push(adjTrans);
+    const nextAccounts = accounts.map(a => {
+      if (a.id === accountId) {
+        return { ...a, allocations };
       }
+      return a;
     });
 
-    const nextTransactions = [...newTransactions, ...transactions];
-    updateStateAndStorage(nextTransactions, pockets, accounts);
+    // Recompute pocket balances by summing up allocations across all accounts
+    const nextPockets = pockets.map(p => {
+      const totalBalance = nextAccounts.reduce((sum, a) => {
+        return sum + (a.allocations?.[p.id] || 0);
+      }, 0);
+      return { ...p, balance: totalBalance };
+    });
+
+    setPockets(nextPockets);
+    setAccounts(nextAccounts);
+    saveStateToStorage(nextPockets, transactions, budgets, notifications, nextAccounts, categories);
   };
 
   const handleAddCategory = (newCat: Omit<Category, 'id'>) => {
@@ -974,16 +1195,7 @@ export default function App() {
   };
 
   // CRUD Handlers for Reminders (Pengingat)
-  const handleAddReminder = (newRemData: Omit<Reminder, 'id' | 'createdAt' | 'dayOfWeek' | 'dayOfMonth' | 'isActive'>) => {
-    const now = new Date();
-    const newReminder: Reminder = {
-      ...newRemData,
-      id: `rem-${Date.now()}`,
-      isActive: true,
-      createdAt: now.toISOString(),
-      dayOfWeek: now.getDay(),
-      dayOfMonth: now.getDate()
-    };
+  const handleAddReminder = (newReminder: Reminder) => {
     const nextReminders = [...reminders, newReminder];
     setReminders(nextReminders);
     const storagePrefix = getStoragePrefix(currentUser?.email || 'shared');

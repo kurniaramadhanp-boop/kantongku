@@ -59,6 +59,7 @@ export default function TransactionHistoryPage({
 
   const totalIncoming = filteredTransactions.filter(t => t.type === 'incoming').reduce((s, t) => s + t.amount, 0);
   const totalOutgoing = filteredTransactions.filter(t => t.type === 'outgoing').reduce((s, t) => s + t.amount, 0);
+  const netCashFlow = totalIncoming - totalOutgoing;
 
   const hasActiveFilters = !!(search || dateFrom || dateTo || selectedCategories.length > 0 || selectedPockets.length > 0 || selectedAccounts.length > 0 || typeFilter !== 'all');
 
@@ -161,8 +162,40 @@ export default function TransactionHistoryPage({
           </div>
         )}
       </div>
+      {/* Summary Cards Panel */}
+      <div className="grid grid-cols-3 gap-2 mt-2">
+        {/* Card 1: Total Masuk */}
+        <div className="glass-card p-3 rounded-xl border border-white/5 bg-emerald-500/5 flex flex-col gap-0.5">
+          <span className="text-[9px] font-label-caps text-emerald-400/70 uppercase tracking-wider flex items-center gap-1">
+            <ArrowDownLeft className="w-3.5 h-3.5 text-emerald-400 shrink-0" /> Masuk
+          </span>
+          <span className="text-xs font-bold text-emerald-400 font-mono-data truncate">
+            {formatRupiah(totalIncoming, false)}
+          </span>
+        </div>
 
-      <button onClick={handleExportWA} className="w-full h-12 bg-primary text-black font-bold text-xs font-label-caps uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99]">
+        {/* Card 2: Total Keluar */}
+        <div className="glass-card p-3 rounded-xl border border-white/5 bg-rose-500/5 flex flex-col gap-0.5">
+          <span className="text-[9px] font-label-caps text-rose-400/70 uppercase tracking-wider flex items-center gap-1">
+            <ArrowUpRight className="w-3.5 h-3.5 text-rose-400 shrink-0" /> Keluar
+          </span>
+          <span className="text-xs font-bold text-rose-400 font-mono-data truncate">
+            {formatRupiah(totalOutgoing, false)}
+          </span>
+        </div>
+
+        {/* Card 3: Arus Kas Bersih (Total Transaksi) */}
+        <div className={`glass-card p-3 rounded-xl border border-white/5 flex flex-col gap-0.5 ${netCashFlow >= 0 ? 'bg-primary/5' : 'bg-amber-500/5'}`}>
+          <span className={`text-[9px] font-label-caps uppercase tracking-wider flex items-center gap-1 truncate ${netCashFlow >= 0 ? 'text-primary/70' : 'text-amber-400/70'}`}>
+            <Receipt className="w-3.5 h-3.5 shrink-0" /> Netto
+          </span>
+          <span className={`text-xs font-bold font-mono-data truncate ${netCashFlow >= 0 ? 'text-primary' : 'text-amber-400'}`}>
+            {netCashFlow >= 0 ? '+' : ''}{formatRupiah(netCashFlow, false)}
+          </span>
+        </div>
+      </div>
+
+      <button onClick={handleExportWA} className="w-full h-12 bg-primary text-black font-bold text-xs font-label-caps uppercase tracking-wider rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all hover:opacity-90 active:scale-[0.99] shrink-0">
          <Send className="w-4 h-4"/> Kirim Analisis Laporan
       </button>
 
@@ -176,7 +209,7 @@ export default function TransactionHistoryPage({
             const cat = categories.find(c => c.id === t.category);
             const colorHex = getCategoryHexColor(t.category);
             return (
-              <div key={t.id} onClick={() => onEditTransactionSelect(t)} className="flex items-center p-3 gap-3 hover:bg-white/5 rounded-xl border border-white/5 glass-card cursor-pointer transition-all">
+              <div key={t.id} className="flex items-center p-3 gap-3 hover:bg-white/5 rounded-xl border border-white/5 glass-card transition-all">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs shrink-0" style={{ backgroundColor: colorHex + '15', border: `1px solid ${colorHex}30` }}>
                   <CategoryIcon name={cat?.icon || 'receipt'} className="w-4 h-4" style={{ color: colorHex }} />
                 </div>
@@ -184,9 +217,31 @@ export default function TransactionHistoryPage({
                   <p className="text-sm font-medium text-white truncate">{t.title}</p>
                   <p className="text-[10px] text-white/40 font-mono-data mt-0.5">{formatDate(t.date)}</p>
                 </div>
-                <span className={`text-sm font-bold font-mono-data shrink-0 ${isExpense ? 'text-rose-400' : 'text-primary'}`}>
-                  {isExpense ? '-' : '+'}{formatRupiah(t.amount, false)}
-                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className={`text-sm font-bold font-mono-data ${isExpense ? 'text-rose-400' : 'text-primary'}`}>
+                    {isExpense ? '-' : '+'}{formatRupiah(t.amount, false)}
+                  </span>
+                  <div className="flex items-center gap-1 border-l border-white/10 pl-2">
+                    <button 
+                      onClick={() => onEditTransactionSelect(t)} 
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-on-surface-variant hover:text-primary transition-all active:scale-95"
+                      title="Edit Transaksi"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (confirm(`Hapus transaksi "${t.title}"?`)) {
+                          onDeleteTransaction(t.id);
+                        }
+                      }} 
+                      className="p-1.5 rounded-lg bg-white/5 hover:bg-rose-500/20 text-on-surface-variant hover:text-rose-400 transition-all active:scale-95"
+                      title="Hapus Transaksi"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })

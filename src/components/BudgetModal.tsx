@@ -51,7 +51,7 @@ export default function BudgetModal({
   const [limit, setLimit] = useState<number>(0);
   const [limitExpr, setLimitExpr] = useState<string>('');
   const [showCalc, setShowCalc] = useState<boolean>(false);
-  const [category, setCategory] = useState<CategoryType>(categories[0]?.id || 'makan');
+  const [selectedCategories, setSelectedCategories] = useState<CategoryType[]>([categories[0]?.id || 'makan']);
   const [type, setType] = useState<'expense_limit' | 'target_funding'>('expense_limit');
   
   // Timeframe States
@@ -64,8 +64,14 @@ export default function BudgetModal({
 
   const isTouchDevice = typeof window !== 'undefined' && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
 
+  const getBudgetCategories = (b: Budget | Omit<Budget, 'id' | 'sisaPercent'>): string[] => {
+    if (b.categories && Array.isArray(b.categories)) return b.categories;
+    if (Array.isArray(b.category)) return b.category;
+    return b.category ? [b.category as string] : [];
+  };
+
   // LOGIKA OTOMATISASI: Menghitung transaksi di dalam rentang awal s/d akhir siklus secara absolut
-  const calculateRealSpent = (catId: string, startStr: string, endStr: string) => {
+  const calculateRealSpent = (catId: string | string[], startStr: string, endStr: string) => {
     if (!startStr || !endStr) return 0;
     
     const sDate = new Date(startStr);
@@ -74,8 +80,10 @@ export default function BudgetModal({
     const eDate = new Date(endStr);
     eDate.setHours(23, 59, 59, 999); // Kunci di mili-detik terakhir hari penutupan
 
+    const categoriesList = Array.isArray(catId) ? catId : [catId];
+
     const filteredTrans = transactions.filter(t => {
-      if (t.category !== catId) return false;
+      if (!categoriesList.includes(t.category)) return false;
       const tDate = new Date(t.date);
       return tDate >= sDate && tDate <= eDate;
     });
@@ -88,7 +96,7 @@ export default function BudgetModal({
     setLimit(0);
     setLimitExpr('');
     setShowCalc(false);
-    setCategory(categories[0]?.id || 'makan');
+    setSelectedCategories([categories[0]?.id || 'makan']);
     setType('expense_limit');
     setTimeframe('1_bulan');
     setStartDate('');
@@ -103,7 +111,7 @@ export default function BudgetModal({
     setLimit(budget.limit);
     setLimitExpr(budget.limit.toString());
     setShowCalc(false);
-    setCategory(budget.category);
+    setSelectedCategories(getBudgetCategories(budget));
     setType(budget.type);
     setTimeframe((budget as any).timeframe || '1_bulan');
     setStartDate((budget as any).startDate || '');
@@ -146,6 +154,7 @@ export default function BudgetModal({
     e.preventDefault();
     if (!title) return alert('Mohon isi nama Aturan Target & Limit');
     if (limit <= 0) return alert('Sediakan batas jajan / target dana alarm yang valid');
+    if (selectedCategories.length === 0) return alert('Mohon pilih minimal satu kategori untuk target & limit ini');
 
     const kini = new Date();
     let computedStartDate = new Date().toISOString().split('T')[0]; // Hari ini (YYYY-MM-DD)
@@ -174,7 +183,7 @@ export default function BudgetModal({
       computedEndDate = endDate;
     }
 
-    const autoSpent = calculateRealSpent(category, computedStartDate, computedEndDate);
+    const autoSpent = calculateRealSpent(selectedCategories, computedStartDate, computedEndDate);
     const remaining = limit - autoSpent;
     const sisaPercent = limit > 0 ? Math.max(0, Math.round((remaining / limit) * 100)) : 0;
 
@@ -182,7 +191,8 @@ export default function BudgetModal({
       title,
       limit,
       spent: autoSpent,
-      category,
+      category: selectedCategories.length === 1 ? selectedCategories[0] : selectedCategories,
+      categories: selectedCategories,
       type,
       timeframe,
       startDate: computedStartDate,
@@ -318,11 +328,31 @@ export default function BudgetModal({
 
                   <div className="flex flex-col gap-1.5">
                     <label className="text-[9px] font-label-caps text-on-surface-variant uppercase">Koneksikan Kategori Transaksi</label>
-                    <select value={category} onChange={(e) => setCategory(e.target.value as CategoryType)} className="h-9 bg-[#0B111E]/40 rounded-lg text-xs text-white border border-white/10 px-2 focus:outline-none">
-                      {categories.map(cat => (
-                        <option key={cat.id} value={cat.id} className="bg-[#0B111E] text-white">{cat.name}</option>
-                      ))}
-                    </select>
+                    <div className="max-h-36 overflow-y-auto border border-white/10 rounded-lg p-2 bg-[#0B111E]/40 flex flex-col gap-1.5 no-scrollbar">
+                      {categories.map(cat => {
+                        const isSelected = selectedCategories.includes(cat.id);
+                        return (
+                          <label key={cat.id} className="flex items-center gap-2.5 p-1.5 rounded-md hover:bg-white/5 cursor-pointer transition-colors text-xs text-white">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {
+                                setSelectedCategories(prev => 
+                                  prev.includes(cat.id) 
+                                    ? prev.filter(id => id !== cat.id) 
+                                    : [...prev, cat.id]
+                                );
+                              }}
+                              className="rounded border-white/20 bg-black/40 text-primary focus:ring-0 focus:ring-offset-0"
+                            />
+                            <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: getCategoryColorHex(cat.color) + '20' }}>
+                              <CategoryIcon name={cat.icon} className="w-3 h-3" style={{ color: getCategoryColorHex(cat.color) }} />
+                            </div>
+                            <span>{cat.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="flex flex-col gap-1.5">
@@ -442,19 +472,40 @@ export default function BudgetModal({
 
                         <div className="flex justify-between items-start gap-2 md:pl-5 md:pr-24">
                           <div className="flex items-center gap-2.5 min-w-0">
-                            <div className="w-8 h-8 rounded-full bg-[#0b101d] border border-white/5 flex items-center justify-center shrink-0">
-                              {(() => {
-                                const cat = categories.find(c => c.id === budget.category);
-                                const colorHex = cat ? getCategoryColorHex(cat.color) : '#64748B';
-                                return <CategoryIcon name={cat?.icon || 'receipt'} className="w-4 h-4" style={{ color: colorHex }} />;
-                              })()}
-                            </div>
+                            {(() => {
+                              const cats = getBudgetCategories(budget);
+                              return (
+                                <div className="flex -space-x-2.5 overflow-hidden shrink-0">
+                                  {cats.slice(0, 3).map((catId, idx) => {
+                                    const cat = categories.find(c => c.id === catId);
+                                    const colorHex = cat ? getCategoryColorHex(cat.color) : '#64748B';
+                                    return (
+                                      <div 
+                                        key={catId} 
+                                        className="w-8 h-8 rounded-full bg-[#0b101d] border border-white/10 flex items-center justify-center shrink-0"
+                                        style={{ zIndex: 3 - idx }}
+                                      >
+                                        <CategoryIcon name={cat?.icon || 'receipt'} className="w-4 h-4" style={{ color: colorHex }} />
+                                      </div>
+                                    );
+                                  })}
+                                  {cats.length > 3 && (
+                                    <div className="w-8 h-8 rounded-full bg-[#0b101d] border border-white/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-white z-0">
+                                      +{cats.length - 3}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
                             <div className="min-w-0">
                               <h3 className="text-sm text-white font-bold leading-snug truncate">{budget.title}</h3>
-                              <p className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                              <p className="text-[10px] text-on-surface-variant flex items-center gap-1 flex-wrap">
                                 <Clock className="w-3 h-3 text-primary" /> 
-                                {budget.type === 'expense_limit' ? 'Limit Belanja' : 'Target Nabung'} • 
+                                {budget.type === 'expense_limit' ? 'Limit' : 'Target'} • 
                                 <span className="capitalize text-white/70"> {tf.replace('_', ' ')}</span>
+                                • <span className="text-primary/95 font-semibold truncate max-w-[120px]" title={getBudgetCategories(budget).map(catId => categories.find(c => c.id === catId)?.name || catId).join(', ')}>
+                                  {getBudgetCategories(budget).map(catId => categories.find(c => c.id === catId)?.name || catId).join(', ')}
+                                </span>
                               </p>
                             </div>
                           </div>

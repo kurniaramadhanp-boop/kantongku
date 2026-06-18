@@ -16,6 +16,7 @@ export interface Account {
   icon: string; // bank, wallet, smartphone, cash, etc.
   color: string; // theme color
   tag?: string; // e.g. "Rekening Utama"
+  allocations?: Record<string, number>; // pocketId -> amount
 }
 
 export type CategoryType = string;
@@ -44,9 +45,13 @@ export interface Budget {
   title: string;
   spent: number;
   limit: number;
-  category: CategoryType;
+  category: CategoryType | CategoryType[];
+  categories?: CategoryType[];
   sisaPercent: number;
   type: 'expense_limit' | 'target_funding'; // expense limit has threshold alerts, target funding accumulates towards a target
+  timeframe?: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface Notification {
@@ -75,5 +80,6 @@ export interface Reminder {
   dayOfWeek: number; // 0-6 (Sunday to Saturday)
   dayOfMonth: number; // 1-31 (day of month)
   lastTriggeredDate?: string; // Format: "YYYY-MM-DD"
+  targetDate?: string; // Format: "YYYY-MM-DD"
 }
 

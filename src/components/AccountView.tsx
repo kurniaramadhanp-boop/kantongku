@@ -111,15 +111,16 @@ export default function AccountView({
 
   const handleStartEditAllocation = () => {
     if (!selectedAccountId) return;
+    const acc = accounts.find(a => a.id === selectedAccountId);
+    if (!acc) return;
+
+    const defaultPocketId = pockets[0]?.id || 'pribadi';
+    const currentAllocations = acc.allocations || { [defaultPocketId]: acc.balance };
+
     const inputs: Record<string, number> = {};
     const exprs: Record<string, string> = {};
     pockets.forEach(p => {
-      const pocketTrans = transactions.filter(t => t.accountId === selectedAccountId && t.pocketId === p.id);
-      const balance = pocketTrans.reduce((sum, t) => {
-        const delta = t.type === 'incoming' ? t.amount : -t.amount;
-        return sum + delta;
-      }, 0);
-      const bal = Math.max(0, balance);
+      const bal = currentAllocations[p.id] || 0;
       inputs[p.id] = bal;
       exprs[p.id] = bal > 0 ? bal.toString() : '';
     });
@@ -135,37 +136,39 @@ export default function AccountView({
     const targetAcc = accounts.find(a => a.id === selectedAccountId);
     if (!targetAcc) return;
 
-    // Calculate sum of other pocket allocations (excluding pocketId and 'pribadi')
+    const defaultPocketId = pockets[0]?.id || 'pribadi';
+
+    // Calculate sum of other pocket allocations (excluding pocketId and defaultPocketId)
     const otherPocketsAllocSum = pockets
-      .filter(p => p.id !== 'pribadi' && p.id !== pocketId)
+      .filter(p => p.id !== defaultPocketId && p.id !== pocketId)
       .reduce((sum, p) => sum + (allocationInputs[p.id] || 0), 0) + val;
 
     if (otherPocketsAllocSum > targetAcc.balance) {
       // Exceeds balance, cap the input value
       const maxVal = targetAcc.balance - pockets
-        .filter(p => p.id !== 'pribadi' && p.id !== pocketId)
+        .filter(p => p.id !== defaultPocketId && p.id !== pocketId)
         .reduce((sum, p) => sum + (allocationInputs[p.id] || 0), 0);
       
       const cappedVal = Math.max(0, maxVal);
       setAllocationInputs(prev => {
         const next = { ...prev, [pocketId]: cappedVal };
-        next['pribadi'] = 0;
+        next[defaultPocketId] = 0;
         return next;
       });
       setAllocationExprs(prev => {
         const next = { ...prev, [pocketId]: cappedVal > 0 ? cappedVal.toString() : '' };
-        next['pribadi'] = '';
+        next[defaultPocketId] = '';
         return next;
       });
     } else {
       setAllocationInputs(prev => {
         const next = { ...prev, [pocketId]: val };
-        next['pribadi'] = targetAcc.balance - otherPocketsAllocSum;
+        next[defaultPocketId] = targetAcc.balance - otherPocketsAllocSum;
         return next;
       });
       setAllocationExprs(prev => {
         const next = { ...prev, [pocketId]: val > 0 ? val.toString() : '' };
-        next['pribadi'] = (targetAcc.balance - otherPocketsAllocSum) > 0 ? (targetAcc.balance - otherPocketsAllocSum).toString() : '';
+        next[defaultPocketId] = (targetAcc.balance - otherPocketsAllocSum) > 0 ? (targetAcc.balance - otherPocketsAllocSum).toString() : '';
         return next;
       });
     }
@@ -332,13 +335,11 @@ export default function AccountView({
     let totalAllocated = 0;
     const tempAllocations: Omit<typeof allocations[number], 'percentage'>[] = [];
 
+    const defaultPocketId = pockets[0]?.id || 'pribadi';
+    const currentAllocations = acc.allocations || { [defaultPocketId]: acc.balance };
+
     pockets.forEach(p => {
-      // Sum transactions in this account for this pocket
-      const pocketTrans = transactions.filter(t => t.accountId === accId && t.pocketId === p.id);
-      const balance = pocketTrans.reduce((sum, t) => {
-        const delta = t.type === 'incoming' ? t.amount : -t.amount;
-        return sum + delta;
-      }, 0);
+      const balance = currentAllocations[p.id] || 0;
 
       if (balance > 0) {
         tempAllocations.push({
